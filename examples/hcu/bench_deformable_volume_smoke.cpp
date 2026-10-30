@@ -1,0 +1,324 @@
+// Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//  * Redistributions of source code must retain the above copyright
+//    notice, this list of conditions and the following disclaimer.
+//  * Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimer in the
+//    documentation and/or other materials provided with the distribution.
+//  * Neither the name of NVIDIA CORPORATION nor the names of its
+//    contributors may be used to endorse or promote products derived
+//    from this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
+// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+// PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+// OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// PhysX HCU smoke test: minimal GPU deformable volume path.
+
+#include "PxPhysicsAPI.h"
+#include "cudamanager/PxCudaContextManager.h"
+#include "cudamanager/PxCudaContext.h"
+#include "gpu/PxGpu.h"
+#include "extensions/PxDeformableVolumeExt.h"
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <thread>
+#include <vector>
+
+using namespace physx;
+
+static bool finiteVec(const PxVec3& v)
+{
+    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
+}
+
+int main(int argc, char** argv)
+{
+    int steps = 60;
+    PxU32 voxels = 4;
+    bool addPlane = true;
+    bool cleanExit = false;
+    bool printAllSteps = false;
+    bool observeVertices = false;
+    PxReal height = 2.0f;
+    PxReal planeY = 0.0f;
+    int cleanExitWaitSeconds = 5;
+
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--voxels") == 0 && i + 1 < argc) {
+            voxels = PxU32(std::atoi(argv[++i]));
+        } else if (std::strcmp(argv[i], "--height") == 0 && i + 1 < argc) {
+            height = PxReal(std::atof(argv[++i]));
+        } else if (std::strcmp(argv[i], "--plane-y") == 0 && i + 1 < argc) {
+            planeY = PxReal(std::atof(argv[++i]));
+        } else if (std::strcmp(argv[i], "--print-all-steps") == 0) {
+            printAllSteps = true;
+        } else if (std::strcmp(argv[i], "--observe-vertices") == 0) {
+            observeVertices = true;
+        } else if (std::strcmp(argv[i], "--no-plane") == 0) {
+            addPlane = false;
+        } else if (std::strcmp(argv[i], "cleanexit") == 0 || std::strcmp(argv[i], "--cleanexit") == 0) {
+            cleanExit = true;
+        } else if (std::strcmp(argv[i], "--cleanexit-wait") == 0 && i + 1 < argc) {
+            cleanExit = true;
+            cleanExitWaitSeconds = std::atoi(argv[++i]);
+            if (cleanExitWaitSeconds < 0)
+                cleanExitWaitSeconds = 0;
+        } else {
+            steps = std::atoi(argv[i]);
+        }
+    }
+    if (steps < 0)
+        steps = 60;
+    if (voxels < 2)
+        voxels = 2;
+
+    printf("========================================\n");
+    printf(" PhysX HCU Smoke - Deformable Volume\n");
+    printf("========================================\n\n");
+
+    static PxDefaultErrorCallback gErr;
+    static PxDefaultAllocator gAlloc;
+    PxFoundation* fnd = PxCreateFoundation(PX_PHYSICS_VERSION, gAlloc, gErr);
+    PxPhysics* phy = PxCreatePhysics(PX_PHYSICS_VERSION, *fnd, PxTolerancesScale());
+
+    PxCudaContextManagerDesc gpuDesc;
+    gpuDesc.deviceOrdinal = 0;
+    PxCudaContextManager* gpuMgr = PxCreateCudaContextManager(*fnd, gpuDesc, nullptr, false);
+    const bool gpuOk = gpuMgr && gpuMgr->contextIsValid();
+    printf("GPU: %s - %s\n", gpuOk ? gpuMgr->getDeviceName() : "NONE", gpuOk ? "enabled" : "disabled");
+    if (!gpuOk)
+        return 2;
+
+    PxSceneDesc sd(phy->getTolerancesScale());
+    sd.gravity = PxVec3(0.0f, -9.81f, 0.0f);
+    sd.cudaContextManager = gpuMgr;
+    PxDefaultCpuDispatcher* dsp = PxDefaultCpuDispatcherCreate(0);
+    sd.cpuDispatcher = dsp;
+    sd.filterShader = PxDefaultSimulationFilterShader;
+    sd.flags |= PxSceneFlag::eENABLE_GPU_DYNAMICS;
+    sd.flags |= PxSceneFlag::eENABLE_PCM;
+    sd.gpuMaxNumPartitions = 8;
+    sd.gpuDynamicsConfig.heapCapacity = 512u * 1024u * 1024u;
+    sd.gpuDynamicsConfig.tempBufferCapacity = 128u * 1024u * 1024u;
+    sd.gpuDynamicsConfig.collisionStackSize = 256u * 1024u * 1024u;
+
+    printf("Creating GPU dynamics scene...\n");
+    fflush(stdout);
+    PxScene* scene = phy->createScene(sd);
+    if (!scene) {
+        printf("FAIL: createScene returned null\n");
+        return 3;
+    }
+
+    PxMaterial* rigidMat = phy->createMaterial(0.5f, 0.5f, 0.0f);
+    PxRigidStatic* plane = nullptr;
+    if (addPlane) {
+        printf("Adding rigid plane at y=%.3f...\n", planeY);
+        fflush(stdout);
+        plane = PxCreatePlane(*phy, PxPlane(0, 1, 0, -planeY), *rigidMat);
+        if (!plane) {
+            printf("FAIL: PxCreatePlane returned null\n");
+            return 4;
+        }
+        scene->addActor(*plane);
+    } else {
+        printf("Skipping rigid plane (--no-plane).\n");
+        fflush(stdout);
+    }
+
+    printf("Creating deformable volume material...\n");
+    fflush(stdout);
+    PxDeformableVolumeMaterial* volMat = phy->createDeformableVolumeMaterial(2.0e5f, 0.3f, 0.1f);
+    if (!volMat) {
+        printf("FAIL: createDeformableVolumeMaterial returned null\n");
+        return 4;
+    }
+
+    printf("Creating deformable volume box: voxels=%u height=%.3f...\n", voxels, height);
+    fflush(stdout);
+    PxDeformableVolume* volume = PxDeformableVolumeExt::createDeformableVolumeBox(
+        PxTransform(PxVec3(0.0f, height, 0.0f)),
+        PxVec3(1.0f, 1.0f, 1.0f),
+        *volMat,
+        *gpuMgr,
+        0.0f,
+        100.0f,
+        voxels,
+        1.0f);
+    printf("createDeformableVolumeBox returned %p\n", static_cast<void*>(volume));
+    fflush(stdout);
+    if (!volume) {
+        printf("FAIL: createDeformableVolumeBox returned null\n");
+        return 5;
+    }
+
+    volume->setDeformableBodyFlag(PxDeformableBodyFlag::eDISABLE_SELF_COLLISION, true);
+    volume->setSolverIterationCounts(30);
+
+    printf("Adding deformable volume actor...\n");
+    fflush(stdout);
+    scene->addActor(*volume);
+
+    const PxU32 simCount = observeVertices ? volume->getSimulationMesh()->getNbVertices() : 0;
+    const PxU32 collCount = observeVertices ? volume->getCollisionMesh()->getNbVertices() : 0;
+    std::vector<PxVec4> simPositions(simCount), collPositions(collCount);
+    bool observationOk = !observeVertices || (simCount > 0 && collCount > 0);
+    auto observe = [&](int frame) {
+        PxI32 sync = -1, simCopy = -1, collCopy = -1;
+        if (observationOk) {
+            PxScopedCudaLock lock(*gpuMgr);
+            PxCudaContext* ctx = gpuMgr->getCudaContext();
+            if (ctx) {
+                sync = PxI32(ctx->streamSynchronize(0));
+                if (sync == 0) {
+                    simCopy = PxI32(ctx->memcpyDtoH(simPositions.data(),
+                        reinterpret_cast<CUdeviceptr>(volume->getSimPositionInvMassBufferD()),
+                        size_t(simCount) * sizeof(PxVec4)));
+                    collCopy = PxI32(ctx->memcpyDtoH(collPositions.data(),
+                        reinterpret_cast<CUdeviceptr>(volume->getPositionInvMassBufferD()),
+                        size_t(collCount) * sizeof(PxVec4)));
+                }
+            }
+        }
+        if (sync != 0 || simCopy != 0 || collCopy != 0) {
+            observationOk = false;
+            printf("VERTEX_READBACK_FAILURE frame=%d sim_vertices=%u coll_vertices=%u sync=%d sim_copy=%d coll_copy=%d\n",
+                   frame, simCount, collCount, int(sync), int(simCopy), int(collCopy));
+            fflush(stdout);
+            return;
+        }
+        PxReal simMin = PX_MAX_F32, simMax = -PX_MAX_F32;
+        PxReal collMin = PX_MAX_F32, collMax = -PX_MAX_F32;
+        PxU32 bad = 0, nearPlane = 0, belowPlane = 0;
+        for (const PxVec4& p : simPositions) {
+            if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z) || !std::isfinite(p.w)) {
+                ++bad;
+                continue;
+            }
+            simMin = PxMin(simMin, p.y);
+            simMax = PxMax(simMax, p.y);
+        }
+        for (const PxVec4& p : collPositions) {
+            if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z) || !std::isfinite(p.w)) {
+                ++bad;
+                continue;
+            }
+            collMin = PxMin(collMin, p.y);
+            collMax = PxMax(collMax, p.y);
+            if (p.y >= planeY - 0.15f && p.y <= planeY + 0.15f)
+                ++nearPlane;
+            if (p.y < planeY - 0.15f)
+                ++belowPlane;
+        }
+        observationOk = observationOk && bad == 0;
+        printf("VERTEX_OBSERVATION marker=PX_HCU_VOLUME_VERTEX_OBSERVATION_P5_V1 frame=%d sim_vertices=%u coll_vertices=%u sim_y_min=%.6f sim_y_max=%.6f coll_y_min=%.6f coll_y_max=%.6f near_plane=%u below_plane=%u bad_vertices=%u sync=%d sim_copy=%d coll_copy=%d\n",
+               frame, simCount, collCount, simMin, simMax, collMin, collMax,
+               nearPlane, belowPlane, bad, int(sync), int(simCopy), int(collCopy));
+        fflush(stdout);
+    };
+
+    printf("Starting simulation: steps=%d voxels=%u plane=%s height=%.3f planeY=%.3f\n",
+           steps, voxels, addPlane ? "yes" : "no", height, planeY);
+    fflush(stdout);
+    if (observeVertices)
+        observe(0);
+    const int timingWarmupSteps = steps > 10 ? 10 : 0;
+    double simulationMs = 0.0;
+    for (int i = 0; i < steps; ++i) {
+        if (printAllSteps || i < 10 || i == steps - 1) {
+            printf("Simulate step %d/%d...\n", i + 1, steps);
+            fflush(stdout);
+        }
+        const std::chrono::steady_clock::time_point stepStart = std::chrono::steady_clock::now();
+        scene->simulate(1.0f / 60.0f);
+        const double simulateMs = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - stepStart).count();
+        if (printAllSteps || i < 10 || i == steps - 1) {
+            printf("Fetch step %d/%d...\n", i + 1, steps);
+            fflush(stdout);
+        }
+        const std::chrono::steady_clock::time_point fetchStart = std::chrono::steady_clock::now();
+        scene->fetchResults(true);
+        if (i >= timingWarmupSteps)
+            simulationMs += simulateMs + std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - fetchStart).count();
+        if (observeVertices && observationOk)
+            observe(i + 1);
+        if (printAllSteps) {
+            PxBounds3 stepBounds = volume->getWorldBounds(1.0f);
+            printf("Step %d bounds min=(%.6f %.6f %.6f) max=(%.6f %.6f %.6f)\n",
+                   i + 1,
+                   stepBounds.minimum.x, stepBounds.minimum.y, stepBounds.minimum.z,
+                   stepBounds.maximum.x, stepBounds.maximum.y, stepBounds.maximum.z);
+            fflush(stdout);
+        }
+    }
+    const int measuredSteps = steps - timingWarmupSteps;
+    printf("PERF marker=PX_HCU_BENCH_SIMULATION_TIMING_V1 warmup_steps=%d measured_steps=%d simulation_ms=%.3f ms_per_step=%.6f steps_per_second=%.3f\n",
+           timingWarmupSteps, measuredSteps, simulationMs,
+           measuredSteps > 0 ? simulationMs / double(measuredSteps) : 0.0,
+           simulationMs > 0.0 ? double(measuredSteps) * 1000.0 / simulationMs : 0.0);
+
+    PxBounds3 bounds = volume->getWorldBounds(1.0f);
+    const bool pass = observationOk && bounds.isValid() && finiteVec(bounds.minimum) && finiteVec(bounds.maximum) && bounds.minimum.y > -5.0f && bounds.maximum.y < 6.0f;
+    printf("Volume bounds min=(%.6f %.6f %.6f) max=(%.6f %.6f %.6f)\n",
+           bounds.minimum.x, bounds.minimum.y, bounds.minimum.z, bounds.maximum.x, bounds.maximum.y, bounds.maximum.z);
+    printf("VERDICT: %s\n", pass ? "PASS" : "FAIL");
+    fflush(stdout);
+
+    printf("Releasing deformable volume...\n");
+    fflush(stdout);
+    volume->release();
+    if (plane) {
+        printf("Releasing rigid plane...\n");
+        fflush(stdout);
+        plane->release();
+    }
+    printf("Releasing scene...\n");
+    fflush(stdout);
+    scene->release();
+    printf("Releasing materials...\n");
+    fflush(stdout);
+    volMat->release();
+    rigidMat->release();
+    printf("Releasing dispatcher...\n");
+    fflush(stdout);
+    dsp->release();
+    printf("Releasing GPU manager...\n");
+    fflush(stdout);
+    gpuMgr->release();
+    printf("Releasing physics...\n");
+    fflush(stdout);
+    phy->release();
+    printf("Releasing foundation...\n");
+    fflush(stdout);
+    fnd->release();
+    printf("Release finished.\n");
+    fflush(stdout);
+
+    if (cleanExit) {
+        printf("Clean exit after explicit PhysX release (--cleanexit), waiting %d seconds for HCU/HSA cleanup...\n", cleanExitWaitSeconds);
+        fflush(stdout);
+        if (cleanExitWaitSeconds > 0)
+            std::this_thread::sleep_for(std::chrono::seconds(cleanExitWaitSeconds));
+        printf("Clean exit wait finished.\n");
+        fflush(stdout);
+        std::_Exit(pass ? 0 : 1);
+    }
+    return pass ? 0 : 1;
+}

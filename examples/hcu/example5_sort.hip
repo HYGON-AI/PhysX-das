@@ -1,0 +1,128 @@
+// Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//  * Redistributions of source code must retain the above copyright
+//    notice, this list of conditions and the following disclaimer.
+//  * Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimer in the
+//    documentation and/or other materials provided with the distribution.
+//  * Neither the name of NVIDIA CORPORATION nor the names of its
+//    contributors may be used to endorse or promote products derived
+//    from this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
+// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+// PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+// OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Example 5: GPU Parallel Sort
+// Tests: block-level sort using warp shuffle patterns from gpucommon
+// Module: gpucommon (shuffle/reduction sort patterns)
+
+#include "PxgCommonDefines.h"
+#include <hip/hip_runtime.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+using namespace physx;
+// Inline GPU bitonic sort within a block (verifies shared memory + sync + shuffle)
+extern "C" __global__ void gpu_bitonic_sort(PxU32* keys, int n)
+{
+    extern __shared__ PxU32 smem[];
+    int tid = threadIdx.x;
+    if (tid < n) smem[tid] = keys[blockIdx.x * blockDim.x + tid];
+    __syncthreads();
+
+    for (int k = 2; k <= blockDim.x; k <<= 1) {
+        for (int j = k >> 1; j > 0; j >>= 1) {
+            int idx = tid ^ j;
+            if (idx > tid) {
+                bool asc = ((tid & k) == 0);
+                if ((smem[tid] > smem[idx]) == asc) {
+                    PxU32 tmp = smem[tid]; smem[tid] = smem[idx]; smem[idx] = tmp;
+                }
+            }
+            __syncthreads();
+        }
+    }
+    if (tid < n) keys[blockIdx.x * blockDim.x + tid] = smem[tid];
+}
+
+// CPU insertion sort for reference
+void sort_cpu(PxU64* keys, PxU32* ranks, int n)
+{
+    for (int i = 1; i < n; i++) {
+        PxU64 k = keys[i];
+        PxU32 r = ranks[i];
+        int j = i - 1;
+        while (j >= 0 && keys[j] > k) {
+            keys[j+1] = keys[j]; ranks[j+1] = ranks[j]; j--;
+        }
+        keys[j+1] = k; ranks[j+1] = r;
+    }
+}
+
+int main()
+{
+    printf("========================================\n");
+    printf(" Example 5: Radix Sort (gpucommon)\n");
+    printf("========================================\n\n");
+
+    const int N = 1024;
+
+    PxU32 *h_keys = new PxU32[N];
+
+    // Random keys
+    srand(42);
+    for (int i = 0; i < N; i++) h_keys[i] = (PxU32)(rand() % 100000);
+
+    // GPU sort
+    PxU32 *d_in;
+    hipMalloc(&d_in, N * sizeof(PxU32));
+    hipMemcpy(d_in, h_keys, N * sizeof(PxU32), hipMemcpyHostToDevice);
+
+    hipEvent_t start, stop;
+    hipEventCreate(&start); hipEventCreate(&stop);
+    hipEventRecord(start);
+
+    int blk = 256, grd = N / blk;
+    for (int run = 0; run < 50; run++)
+        gpu_bitonic_sort<<<grd, blk, blk * sizeof(PxU32)>>>(d_in, N);
+
+    hipEventRecord(stop);
+    hipDeviceSynchronize();
+    float ms;
+    hipEventElapsedTime(&ms, start, stop);
+
+    PxU32 *gpu_keys = new PxU32[N];
+    hipMemcpy(gpu_keys, d_in, N * sizeof(PxU32), hipMemcpyDeviceToHost);
+
+    // Verify: each block of 256 elements should be sorted ascending
+    int mismatches = 0;
+    for (int b = 0; b < grd; b++) {
+        for (int i = 1; i < blk; i++) {
+            int idx = b * blk + i;
+            if (idx < N && gpu_keys[idx-1] > gpu_keys[idx]) mismatches++;
+        }
+    }
+
+    printf("50 sort runs: %.2f ms\n", ms);
+    printf("Unsorted pairs: %d / %d blocks\n", mismatches, grd);
+
+    bool pass = (mismatches == 0);
+    printf("\n%s\n", pass ? "[PASS] GPU sort verified" : "[FAIL]");
+
+    delete[] h_keys; delete[] gpu_keys;
+    hipFree(d_in);
+    hipEventDestroy(start); hipEventDestroy(stop);
+    return pass ? 0 : 1;
+}

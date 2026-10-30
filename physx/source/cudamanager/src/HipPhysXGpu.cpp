@@ -1,0 +1,295 @@
+// Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//  * Redistributions of source code must retain the above copyright
+//    notice, this list of conditions and the following disclaimer.
+//  * Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimer in the
+//    documentation and/or other materials provided with the distribution.
+//  * Neither the name of NVIDIA CORPORATION nor the names of its
+//    contributors may be used to endorse or promote products derived
+//    from this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ''AS IS'' AND ANY
+// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+// PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+// OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// HipPhysXGpu — HCU PxPhysXGpu: creates real GPU objects via the existing
+// Pxg* host-side implementations (PxgCudaBroadPhaseSap, PxgDynamicsContext,
+// PxgNphaseImplementationContext, PxgSimulationController, etc.)
+//
+// This replaces the NVIDIA PxgPhysXGpu.cpp factory for HCU builds.
+
+#include "PxPhysXGpu.h"
+#include "PxsKernelWrangler.h"
+#include "PxsHeapMemoryAllocator.h"
+#include "PxsMemoryManager.h"
+#include "cudamanager/PxCudaContextManager.h"
+
+// Real GPU object headers (NVIDIA source, compiled for HCU)
+#include "PxgMemoryManager.h"
+#include "PxgHeapMemAllocator.h"
+#include "PxgKernelWrangler.h"
+#include "PxgCudaBroadPhaseSap.h"
+#include "PxgAABBManager.h"
+#include "PxgNphaseImplementationContext.h"
+#include "PxgSimulationController.h"
+#include "PxgDynamicsContext.h"
+#include "PxgTGSDynamicsContext.h"
+#include "PxgParticleSystem.h"
+#include "PxgBroadPhase.h"
+#include "PxgCommon.h"
+#include "PxgNarrowphase.h"
+#include "PxgSolver.h"
+
+#include "foundation/PxHashMap.h"
+#include "foundation/PxFoundation.h"
+#include <new>
+#include <cstdio>
+
+#define HCU_TRACE(fmt, ...) fprintf(stderr, "[HCU device] " fmt "\n", ##__VA_ARGS__)
+
+#if PX_SUPPORT_GPU_PHYSX
+namespace physx {
+
+// Forward declarations
+PxsMemoryManager* createPxgMemoryManager(PxCudaContextManager* cudaContextManager);
+
+// Per-context KernelWrangler map (same pattern as PxgPhysXGpu)
+struct HipKernelWranglerMap
+{
+	typedef PxHashMap<PxCudaContextManager*, PxgCudaKernelWranglerManager*> Map;
+	Map                       mMap;
+	const Map::Entry*         find(PxCudaContextManager* k) const  { return mMap.find(k); }
+	void                      insert(PxCudaContextManager* k, PxgCudaKernelWranglerManager* v)
+	                                                               { mMap.insert(k, v); }
+	Map::Iterator             getIterator()                        { return mMap.getIterator(); }
+	void                      clear()                              { mMap.clear(); }
+};
+
+// NOTE: PxPhysXGpu does NOT inherit from PxUserAllocated, so we cannot use
+// PX_NEW / PX_DELETE_THIS.  Plain new/delete.
+struct HipPhysXGpu final : public PxPhysXGpu
+{
+	// ---- Lifecycle ----
+	void release() override {
+		for(HipKernelWranglerMap::Map::Iterator iter = mKernelWranglerInstances.getIterator();
+		    !iter.done(); ++iter)
+		{
+			if(iter->second) PX_DELETE(iter->second);
+		}
+		mKernelWranglerInstances.clear();
+		delete this;
+	}
+
+	static HipPhysXGpu& getInstance() {
+		static HipPhysXGpu* inst = nullptr;
+		if(!inst) inst = new (std::nothrow) HipPhysXGpu;
+		return *inst;
+	}
+
+	// ---- Memory Manager ----
+	PxsMemoryManager* createGpuMemoryManager(PxCudaContextManager* ctx) override {
+		HCU_TRACE("createGpuMemoryManager");
+		return createPxgMemoryManager(ctx);
+	}
+
+	// ---- Kernel Wrangler Manager ----
+	PxsKernelWranglerManager* getGpuKernelWranglerManager(PxCudaContextManager* ctx) override {
+		if(!ctx) return nullptr;
+		HCU_TRACE("getGpuKernelWranglerManager");
+
+		const HipKernelWranglerMap::Map::Entry* entry = mKernelWranglerInstances.find(ctx);
+		if(entry) return entry->second;
+
+		HCU_TRACE("  creating PxgCudaKernelWranglerManager...");
+		PxgCudaKernelWranglerManager* wrangler =
+			PX_NEW(PxgCudaKernelWranglerManager)(*ctx, *PxGetErrorCallback());
+		HCU_TRACE("  done");
+		mKernelWranglerInstances.insert(ctx, wrangler);
+		return wrangler;
+	}
+
+	// ---- Heap Memory Allocator ----
+	PxsHeapMemoryAllocatorManager* createGpuHeapMemoryAllocatorManager(
+		PxU32 heapCapacity, PxsMemoryManager* memoryManager, PxU32) override
+	{
+		HCU_TRACE("createGpuHeapMemoryAllocatorManager cap=%u", heapCapacity);
+		return PX_NEW(PxgHeapMemoryAllocatorManager)(heapCapacity, memoryManager);
+	}
+
+	// ---- GPU BroadPhase ----
+	Bp::BroadPhase* createGpuBroadPhase(const PxGpuBroadPhaseDesc& desc,
+		PxsKernelWranglerManager* gpuKernelWrangler, PxCudaContextManager* cudaContextManager,
+		PxU32 gpuComputeVersion, const PxGpuDynamicsMemoryConfig& config,
+		PxsHeapMemoryAllocatorManager* heapMemoryManager, PxU64 contextID) override
+	{
+		HCU_TRACE("createGpuBroadPhase");
+		if(gpuComputeVersion != 0) return nullptr;
+		return PX_PLACEMENT_NEW(
+			PX_ALLOC(sizeof(PxgCudaBroadPhaseSap), "PxgCudaBroadPhaseSap"),
+			PxgCudaBroadPhaseSap)(desc,
+			static_cast<PxgCudaKernelWranglerManager*>(gpuKernelWrangler),
+			cudaContextManager, config,
+			static_cast<PxgHeapMemoryAllocatorManager*>(heapMemoryManager), contextID);
+	}
+
+	// ---- GPU AABB Manager ----
+	Bp::AABBManagerBase* createGpuAABBManager(
+		PxsKernelWranglerManager* gpuKernelWrangler,
+		PxCudaContextManager* cudaContextManager, PxU32 gpuComputeVersion,
+		const PxGpuDynamicsMemoryConfig& config, PxsHeapMemoryAllocatorManager* heapMemoryManager,
+		Bp::BroadPhase& bp, Bp::BoundsArray& boundsArray, PxFloatArrayPinnedSafe& contactDistance,
+		PxU32 maxNbAggregates, PxU32 maxNbShapes, PxVirtualAllocator& allocator, PxU64 contextID,
+		PxPairFilteringMode::Enum kineKineFilteringMode,
+		PxPairFilteringMode::Enum staticKineFilteringMode) override
+	{
+		HCU_TRACE("createGpuAABBManager");
+		if(gpuComputeVersion != 0) return nullptr;
+		return PX_PLACEMENT_NEW(
+			PX_ALLOC(sizeof(PxgAABBManager), "PxgAABBManager"), PxgAABBManager)(
+			static_cast<PxgCudaKernelWranglerManager*>(gpuKernelWrangler),
+			cudaContextManager, static_cast<PxgHeapMemoryAllocatorManager*>(heapMemoryManager),
+			config, bp, boundsArray, contactDistance, maxNbAggregates, maxNbShapes, allocator,
+			contextID, kineKineFilteringMode, staticKineFilteringMode);
+	}
+
+	// ---- GPU Bounds Array ----
+	Bp::BoundsArray* createGpuBounds(PxVirtualAllocator&) override { return nullptr; }
+
+	// ---- GPU NarrowPhase Implementation Context ----
+	PxvNphaseImplementationContext* createGpuNphaseImplementationContext(
+		PxsContext& context, PxsKernelWranglerManager* gpuKernelWrangler,
+		PxvNphaseImplementationFallback* fallbackForUnsupportedCMs,
+		const PxGpuDynamicsMemoryConfig& gpuDynamicsConfig,
+		void* contactStreamBase, void* patchStreamBase, void* forceAndIndiceStreamBase,
+		PxBoundsArrayPinned& bounds, IG::IslandSim* islandSim, Dy::Context* dynamicsContext,
+		PxU32, PxsHeapMemoryAllocatorManager* heapMemoryManager, bool useGPUBP) override
+	{
+		HCU_TRACE("createGpuNphaseImplementationContext");
+		return PX_PLACEMENT_NEW(
+			PX_ALLOC(sizeof(PxgNphaseImplementationContext), "PxgNphaseImplementationContext"),
+			PxgNphaseImplementationContext)(context, gpuKernelWrangler,
+			fallbackForUnsupportedCMs, gpuDynamicsConfig,
+			contactStreamBase, patchStreamBase, forceAndIndiceStreamBase,
+			bounds, islandSim, dynamicsContext,
+			static_cast<PxgHeapMemoryAllocatorManager*>(heapMemoryManager), useGPUBP);
+	}
+
+	// ---- GPU Simulation Controller ----
+	PxsSimulationController* createGpuSimulationController(
+		PxsKernelWranglerManager* gpuWranglerManagers, PxCudaContextManager* cudaContextManager,
+		Dy::Context* dynamicContext, PxvNphaseImplementationContext* npContext,
+		Bp::BroadPhase* bp, bool useGpuBroadphase, PxsSimulationControllerCallback* callback,
+		PxU32, PxsHeapMemoryAllocatorManager* heapMemoryManager,
+		PxU32 maxSoftBodyContacts, PxU32 maxFemClothContacts,
+		PxU32 maxParticleContacts, PxU32 collisionStackSizeBytes,
+		bool enableBodyAccelerations) override
+	{
+		HCU_TRACE("createGpuSimulationController");
+		return PX_PLACEMENT_NEW(
+			PX_ALLOC(sizeof(PxgSimulationController), "PxgSimulationController"),
+			PxgSimulationController)(gpuWranglerManagers, cudaContextManager,
+			static_cast<PxgDynamicsContext*>(dynamicContext),
+			static_cast<PxgNphaseImplementationContext*>(npContext),
+			bp, useGpuBroadphase, callback,
+			static_cast<PxgHeapMemoryAllocatorManager*>(heapMemoryManager),
+			maxSoftBodyContacts, maxFemClothContacts, maxParticleContacts,
+			collisionStackSizeBytes, enableBodyAccelerations);
+	}
+
+	// ---- GPU Dynamics Context ----
+	Dy::Context* createGpuDynamicsContext(
+		Cm::FlushPool& taskPool, PxsKernelWranglerManager* gpuKernelWrangler,
+		PxCudaContextManager* cudaContextManager, const PxGpuDynamicsMemoryConfig& config,
+		IG::SimpleIslandManager& islandManager,
+		PxU32 maxNumPartitions, PxU32 maxNumStaticPartitions,
+		bool enableStabilization, bool useEnhancedDeterminism,
+		bool solveArticulationContactLast, PxReal maxBiasCoefficient,
+		PxU32, PxvSimStats& simStats, PxsHeapMemoryAllocatorManager* heapMemoryManager,
+		bool frictionEveryIteration, bool externalForcesEveryTgsIterationEnabled,
+		PxSolverType::Enum solverType, PxReal lengthScale, bool enableDirectGPUAPI,
+		PxU64 contextID, bool isResidualReportingEnabled) override
+	{
+		HCU_TRACE("createGpuDynamicsContext solverType=%d", (int)solverType);
+		if(solverType == PxSolverType::eTGS)
+		{
+			return PX_PLACEMENT_NEW(
+				PX_ALLOC(sizeof(PxgTGSDynamicsContext), "PxgTGSDynamicsContext"),
+				PxgTGSDynamicsContext)(taskPool, gpuKernelWrangler, cudaContextManager,
+				config, islandManager, maxNumPartitions, maxNumStaticPartitions,
+				enableStabilization, useEnhancedDeterminism,
+				solveArticulationContactLast, maxBiasCoefficient,
+				simStats, static_cast<PxgHeapMemoryAllocatorManager*>(heapMemoryManager),
+				externalForcesEveryTgsIterationEnabled, lengthScale, enableDirectGPUAPI,
+				contextID, isResidualReportingEnabled);
+		}
+
+		return PX_PLACEMENT_NEW(
+			PX_ALLOC(sizeof(PxgDynamicsContext), "PxgDynamicsContext"),
+			PxgDynamicsContext)(taskPool, gpuKernelWrangler, cudaContextManager,
+			config, islandManager, maxNumPartitions, maxNumStaticPartitions,
+			enableStabilization, useEnhancedDeterminism,
+			solveArticulationContactLast, maxBiasCoefficient,
+			simStats, static_cast<PxgHeapMemoryAllocatorManager*>(heapMemoryManager),
+			frictionEveryIteration, lengthScale, enableDirectGPUAPI,
+			contextID, isResidualReportingEnabled);
+	}
+
+	// ---- Particle buffers ----
+	PxsParticleBuffer* createParticleBuffer(
+		PxU32 maxNumParticles, PxU32 maxVolumes, PxCudaContextManager& cudaContextManager) override
+	{
+		return static_cast<PxsParticleBuffer*>(
+			PX_NEW(PxgParticleBuffer)(maxNumParticles, maxVolumes, cudaContextManager));
+	}
+
+	PxsParticleClothBuffer* createParticleClothBuffer(
+		PxU32 maxNumParticles, PxU32 maxVolumes, PxU32 maxNumCloths,
+		PxU32 maxNumTriangles, PxU32 maxNumSprings,
+		PxCudaContextManager& cudaContextManager) override
+	{
+		return static_cast<PxsParticleClothBuffer*>(
+			PX_NEW(PxgParticleClothBuffer)(maxNumParticles, maxVolumes, maxNumCloths,
+				maxNumTriangles, maxNumSprings, cudaContextManager));
+	}
+
+	PxsParticleAndDiffuseBuffer* createParticleAndDiffuseBuffer(
+		PxU32 maxNumParticles, PxU32 maxVolumes, PxU32 maxNumDiffuseParticles,
+		PxCudaContextManager& cudaContextManager) override
+	{
+		return static_cast<PxsParticleAndDiffuseBuffer*>(
+			PX_NEW(PxgParticleAndDiffuseBuffer)(maxNumParticles, maxVolumes,
+				maxNumDiffuseParticles, cudaContextManager));
+	}
+	PxsParticleRigidBuffer* createParticleRigidBuffer(
+		PxU32 maxNumParticles, PxU32 maxVolumes, PxU32 maxNumRigids,
+		PxCudaContextManager& cudaContextManager) override
+	{
+		return static_cast<PxsParticleRigidBuffer*>(
+			PX_NEW(PxgParticleRigidBuffer)(maxNumParticles, maxVolumes, maxNumRigids,
+				cudaContextManager));
+	}
+
+private:
+	HipKernelWranglerMap mKernelWranglerInstances;
+};
+
+} // namespace physx
+
+// PxCreatePhysXGpu is declared with PX_C_EXPORT (extern "C") in PxPhysXGpu.h
+// and must have C linkage for PxvGetPhysXGpu to resolve it.
+extern "C" physx::PxPhysXGpu* PxCreatePhysXGpu() {
+	fprintf(stderr, "[HCU device] PxCreatePhysXGpu called\n");
+	return &physx::HipPhysXGpu::getInstance();
+}
+#endif // PX_SUPPORT_GPU_PHYSX
