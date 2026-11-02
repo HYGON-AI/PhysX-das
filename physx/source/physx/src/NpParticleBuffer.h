@@ -24,7 +24,7 @@
 //
 // Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
-// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.  
+// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
 // Copyright (c) 2026 Hygon Information Technology Co., Ltd.
 
 #ifndef NP_PARTICLE_BUFFER_H
@@ -84,7 +84,7 @@ namespace physx
 		: APIClass(type)
 		, NpBase(NpType::eUNDEFINED)
 		, mGpuBuffer(NULL)
-		, mParticleSystem(NULL) 
+		, mParticleSystem(NULL)
 		, mBufferIndex(0xffffffff)
 		, mIsTracked(false)
 		{}
@@ -272,7 +272,7 @@ namespace physx
 	class NpParticleClothBuffer : public NpParticleBufferBase<PxParticleClothBuffer>
 	{
 	public:
-		NpParticleClothBuffer(PxU32 maxNumParticles, PxU32 maxVolumes, PxU32 maxNumCloths, PxU32 maxNumTriangles, 
+		NpParticleClothBuffer(PxU32 maxNumParticles, PxU32 maxVolumes, PxU32 maxNumCloths, PxU32 maxNumTriangles,
 			PxU32 maxNumSprings, PxCudaContextManager& cudaContextManager);
 		virtual void release() PX_OVERRIDE PX_FINAL;
 

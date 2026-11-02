@@ -24,7 +24,7 @@
 //
 // Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
-// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.  
+// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
 // Copyright (c) 2026 Hygon Information Technology Co., Ltd.
 
 #include "foundation/PxPreprocessor.h"
@@ -244,7 +244,7 @@ namespace physx
 			numUnpartitionedSprings = newNumUnpartitionedSprings;
 		}
 
-		// after all of this we have the number of springs per partition in tempSpringsPerPartition. we don't really know what spring will 
+		// after all of this we have the number of springs per partition in tempSpringsPerPartition. we don't really know what spring will
 		// go where yet, that will follow later.
 	}
 
@@ -253,7 +253,7 @@ namespace physx
 		//each particle has a partition progress counter
 		PxU32* tempPartitionProgresses = reinterpret_cast<PxU32*>(PX_ALLOC(sizeof(PxU32) * mNumParticles, "tempPartitionProgresses"));
 
-		//this stores the spring index for the unpartitioned springs 
+		//this stores the spring index for the unpartitioned springs
 		PxU32* tempSprings = reinterpret_cast<PxU32*>(PX_ALLOC(sizeof(PxU32) * mNumSprings, "tempSprings"));
 
 		PxArray<PxU32> tempSpringsPerPartition;
@@ -425,8 +425,8 @@ namespace physx
 		// if particle x is at index y in partition 1, we build a table such that particle x in partition 2 can look up the index in partition 1
 		// This basically maintains the gauss-seidel part of the solver, where each partition works on the results of the another partition.
 		// This remap table is build across combined partitions. So there will never be a remap into the same partition.
-		// 
-		// numCopies is then the number of final copies, meaning all copies of each particle that don't have a remap into one of the following 
+		//
+		// numCopies is then the number of final copies, meaning all copies of each particle that don't have a remap into one of the following
 		// partitions.
 		//
 		for (PxU32 i = 0; i < mNumParticles; ++i)
@@ -502,7 +502,7 @@ namespace physx
 		//
 		// for all particle copies that are at the end of a remap chain, calculate the remap
 		// into the final accumulation buffer.
-		// 
+		//
 		// the final accumulation buffer will have numCopies entries for each particle.
 		//
 		for (PxU32 i = 0; i < mNumParticles; ++i)
@@ -629,7 +629,7 @@ namespace physx
 
 	///////////////////////////////////////////////////////////////////////////////////////
 
-	NpParticleAndDiffuseBuffer::NpParticleAndDiffuseBuffer(PxU32 maxNumParticles, PxU32 maxVolumes, 
+	NpParticleAndDiffuseBuffer::NpParticleAndDiffuseBuffer(PxU32 maxNumParticles, PxU32 maxVolumes,
 		PxU32 maxNumDiffuseParticles, PxCudaContextManager& cudaContextManager)
 		: NpParticleBufferBase<PxParticleAndDiffuseBuffer>(PxConcreteType::ePARTICLE_DIFFUSE_BUFFER)
 	{
@@ -660,7 +660,7 @@ namespace physx
 
 	///////////////////////////////////////////////////////////////////////////////////////
 
-	NpParticleClothBuffer::NpParticleClothBuffer(PxU32 maxNumParticles, PxU32 maxVolumes, PxU32 maxNumCloths, 
+	NpParticleClothBuffer::NpParticleClothBuffer(PxU32 maxNumParticles, PxU32 maxVolumes, PxU32 maxNumCloths,
 		PxU32 maxNumTriangles, PxU32 maxNumSprings, PxCudaContextManager& cudaContextManager)
 		: NpParticleBufferBase<PxParticleClothBuffer>(PxConcreteType::ePARTICLE_CLOTH_BUFFER)
 	{

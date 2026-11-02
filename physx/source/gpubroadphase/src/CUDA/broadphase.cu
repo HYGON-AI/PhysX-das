@@ -157,7 +157,7 @@ static __device__ PX_FORCE_INLINE void clearHandles(const PxU32 handle, const Px
 {
 	const PxgSapBox1D& sapBox = boxSapBox1D[handle];
 	const PxU32 minIndex = sapBox.mMinMax[0];
-	const PxU32 maxIndex = sapBox.mMinMax[1]; 
+	const PxU32 maxIndex = sapBox.mMinMax[1];
 
 	boxHandle[minIndex] = markDeleted(boxHandle[minIndex]);
 	boxHandle[maxIndex] = markDeleted(boxHandle[maxIndex]);
@@ -169,7 +169,7 @@ extern "C" __global__ void markRemovedPairsLaunch(const PxgBroadPhaseDesc* bpDes
 	const PxU32 numRemovedHandleSize = bpDesc->numRemovedHandles;
 
 	//We mark this in the previous frame's handles. Then, after sorting, we use the ranks to create the current
-	//sorted handle list from the previous handle list. 
+	//sorted handle list from the previous handle list.
 
 	PxU32* boxHandleX = bpDesc->boxHandles[1][0];//previous frame's handle
 	PxU32* boxHandleY = bpDesc->boxHandles[1][1];
@@ -194,14 +194,14 @@ extern "C" __global__ void markRemovedPairsLaunch(const PxgBroadPhaseDesc* bpDes
 
 		bounds[handle].setEmpty();
 	}
-}  
+}
 
 //set projections and sap box as invalid
 static __device__ PX_FORCE_INLINE void clearPairs(const PxU32 handle, PxgSapBox1D* boxSapBox1D, PxU32* boxProjection)
 {
 	PxgSapBox1D& sapBox = boxSapBox1D[handle];
 	const PxU32 minIndex = sapBox.mMinMax[0];
-	const PxU32 maxIndex = sapBox.mMinMax[1]; 
+	const PxU32 maxIndex = sapBox.mMinMax[1];
 
 	boxProjection[minIndex] = PXG_INVALID_BP_PROJECTION;
 	boxProjection[maxIndex] = PXG_INVALID_BP_PROJECTION;
@@ -210,7 +210,7 @@ static __device__ PX_FORCE_INLINE void clearPairs(const PxU32 handle, PxgSapBox1
 	sapBox.mMinMax[1] = PXG_INVALID_BP_SAP_BOX;
 }
 
-//This method will be called after we perform incremental sap to make the projection as PXG_INVALID_BP_PROJECTION(0xffffffff) so that 
+//This method will be called after we perform incremental sap to make the projection as PXG_INVALID_BP_PROJECTION(0xffffffff) so that
 //when we perform the second sort for the projection with removed pairs and newly inserted pairs, the removed pairs will be shuffle to
 //the end of the list
 extern "C" __global__ void markRemovedPairsProjectionsLaunch(const PxgBroadPhaseDesc* bpDesc)	// BP_UPDATE_DELETEDPAIRS
@@ -236,7 +236,7 @@ extern "C" __global__ void markRemovedPairsProjectionsLaunch(const PxgBroadPhase
 		clearPairs(handle, boxSapBox1DY, boxProjectionY);
 		clearPairs(handle, boxSapBox1DZ, boxProjectionZ);
 	}
-}   
+}
 
 //This kernel will be called when we have new pairs inserted into the scene
 extern "C" __global__ void markCreatedPairsLaunch(const PxgBroadPhaseDesc* bpDesc)	// BP_UPDATE_CREATEDPAIRS //###ONESHOT
@@ -291,13 +291,13 @@ extern "C" __global__ void markCreatedPairsLaunch(const PxgBroadPhaseDesc* bpDes
 
 	//we need to pad the handles to the multiply of 4 for the radix sort
 	const PxU32 numExistingProjections = numCreatedHandleSize + startIndex;
-	
+
 	const PxU32 remainingProjections = numExistingProjections&1;
-	
+
 	if(globalThreadIndex < remainingProjections)
 	{
 		const PxU32 index = numExistingProjections + globalThreadIndex;
-		
+
 		boxProjectionsX[index] = make_uint2(PXG_INVALID_BP_PROJECTION, PXG_INVALID_BP_PROJECTION);
 		boxHandlesX[index] = make_uint2(PXG_INVALID_BP_HANDLE, PXG_INVALID_BP_HANDLE);
 		boxProjectionsY[index] = make_uint2(PXG_INVALID_BP_PROJECTION, PXG_INVALID_BP_PROJECTION);
@@ -317,7 +317,7 @@ extern "C" __global__ void initializeSapBox1DLaunch(const PxgBroadPhaseDesc* bpD
 	const PxU32* boxHandlesX = bpDesc->boxHandles[0][0]; // current frame's handle
 	const PxU32* boxHandlesY = bpDesc->boxHandles[0][1]; //bpDesc->boxHandles[1];
 	const PxU32* boxHandlesZ = bpDesc->boxHandles[0][2];//bpDesc->boxHandles[2];
-	
+
 	PxgSapBox1D* boxSapBox1DX = isNew ? bpDesc->boxNewSapBox1D[0] : bpDesc->boxSapBox1D[0];
 	PxgSapBox1D* boxSapBox1DY = isNew ? bpDesc->boxNewSapBox1D[1] : bpDesc->boxSapBox1D[1];
 	PxgSapBox1D* boxSapBox1DZ = isNew ? bpDesc->boxNewSapBox1D[2] : bpDesc->boxSapBox1D[2];
@@ -369,7 +369,7 @@ extern "C" __global__ void markUpdatedPairsLaunch(const PxgBroadPhaseDesc* bpDes
 	const PxgSapBox1D* box1dX = bpDesc->boxSapBox1D[AXIS_X];
 	const PxgSapBox1D* box1dY = bpDesc->boxSapBox1D[AXIS_Y];
 	const PxgSapBox1D* box1dZ = bpDesc->boxSapBox1D[AXIS_Z];
-	
+
 	const PxgIntegerAABB* newBounds = bpDesc->newIntegerBounds;
 
 	const PxU32 globalThreadIdx = threadIdx.x + blockIdx.x * blockDim.x;
@@ -444,7 +444,7 @@ extern "C" __global__ void markUpdatedPairsLaunch2(const PxgBroadPhaseDesc* bpDe
 	const PxgSapBox1D* box1dX = bpDesc->boxSapBox1D[AXIS_X];
 	const PxgSapBox1D* box1dY = bpDesc->boxSapBox1D[AXIS_Y];
 	const PxgSapBox1D* box1dZ = bpDesc->boxSapBox1D[AXIS_Z];
-	
+
 	const PxgIntegerAABB* newBounds = bpDesc->newIntegerBounds;
 
 	// PT: TODO: understand this loop that I copied from other kernels
@@ -492,14 +492,14 @@ static __device__ void firstPassEndPtsHistogram(
 	const PxU32 WARP_PERBLOCK_SIZE = PxgBPKernelBlockDim::BP_COMPUTE_ENDPT_HISTOGRAM / WARP_SIZE;
 
 	//For now, assume that all regions are the same dimension!
-	//const PxU32 stride = (numProjections + PXG_BP_REGION_X-1)/PXG_BP_REGION_X; 
+	//const PxU32 stride = (numProjections + PXG_BP_REGION_X-1)/PXG_BP_REGION_X;
 
 	__shared__ PxU32 sWarpEndPtsAccum[WARP_PERBLOCK_SIZE];
 	__shared__ PxU32 sAccumStart;
-	__shared__ PxU32 sAccumEnd;	
-	__shared__ PxU32 sAccumEnd2;	
+	__shared__ PxU32 sAccumEnd;
+	__shared__ PxU32 sAccumEnd2;
 
-	const PxU32 numProjections = numHandles*2;	
+	const PxU32 numProjections = numHandles*2;
 
 	const PxU32 totalBlockRequired = (numProjections + (blockDim.x-1))/ blockDim.x;
 
@@ -548,7 +548,7 @@ static __device__ void firstPassEndPtsHistogram(
 		const PxU32 end2Accum = __popc(__ballot_sync(FULL_MASK, end2)&threadMask);
 
 		//KS - we can use 10 bits per counter because each warp can produce at most 32 of each number. There are 8 warps per block,
-		//so the limit is 256, which is below the 1024 max value we can store in 10 bits. This avoids needing to do 3x 
+		//so the limit is 256, which is below the 1024 max value we can store in 10 bits. This avoids needing to do 3x
 		//reductions to sum 3x smaller numbers below
 		PxU32 val = (start<<20)|(end<<10) | end2;
 		PxU32 endPtAccum = ((startAccum <<20) | (endAccum << 10) | end2Accum);
@@ -624,7 +624,7 @@ static __device__ void secondPassEndPtsHistogram(
 
 	const PxU32 idx = threadIdx.x;
 
-	const PxU32 threadIndexInWarp = threadIdx.x&(WARP_SIZE-1);  
+	const PxU32 threadIndexInWarp = threadIdx.x&(WARP_SIZE-1);
 	const PxU32 warpIndex = threadIdx.x/WARP_SIZE;
 
 	{
@@ -688,19 +688,19 @@ static __device__ void secondPassEndPtsHistogram(
 
 			const PxU32 outIndex = sPtsHistograms[startProjection][workIndex] + sBlockAccum[startProjection];
 			const PxU32 outIndex2 = sPtsHistograms[1-startProjection][workIndex] + sBlockAccum[1-startProjection];
-			
+
 			sPtsHistograms[startProjection][workIndex] = outIndex;
 			sPtsHistograms[1-startProjection][workIndex] = outIndex2;
 
 			if(!isNewOrDeleted)
 				sOrderedHandles[startProjection][outIndex] = getHandle(sortedHandle);
-			
+
 			//printf("Region %i: workIndex = %i, outIndex = %i, outIndex2 = %i\n", blockIdx.z, workIndex, outIndex, outIndex2);
 
 			if(totalEndPtsHistogram)
 			{
 				const PxU32 outIndexTotalEnd = totalEndPtsHistogram[workIndex] + sBlockTotalEndPtHistogram[blockIdx.x];
-				totalEndPtsHistogram[workIndex] = outIndexTotalEnd;			
+				totalEndPtsHistogram[workIndex] = outIndexTotalEnd;
 			}
 		}
 	}
@@ -712,7 +712,7 @@ extern "C" __global__ void computeEndPtsHistogram(const PxgBroadPhaseDesc* bpDes
 {
 	//for(PxU32 axis = 0; axis < 3; ++axis)
 	PxU32 axis = blockIdx.y;
-	
+
 	{
 		//unsigned mask_isIncremental = __ballot_sync(FULL_MASK, isIncremental);
 		//KS - we know that isIncremental is either true for all threads, or false
@@ -830,22 +830,22 @@ extern "C" __global__ void createRegionsKernel(const PxgBroadPhaseDesc* bpDesc)	
 				const PxgSapBox1D& sapX = sapBoxX[handle];
 				const PxU32 startIndex = sapX.mMinMax[0];
 				const PxU32 endIndex = sapX.mMinMax[1];
-				
+
 				const PxU32 startIndexX = endPtsHistogramX[startIndex];
 				const PxU32 endIndexX = endPtsHistogramX[endIndex];
 				const PxU32 sRegionX = startIndexX / elementsPerRegions;
 				const PxU32 eRegionX = endIndexX / elementsPerRegions;
-		
+
 				//calculate region index in y axis
 				const PxgSapBox1D& sapY = sapBoxY[handle];
 				PxU32 startIndexY = sapY.mMinMax[0];
 				PxU32 endIndexY = sapY.mMinMax[1];
-				
+
 				startIndexY = endPtsHistogramY[startIndexY];
 				endIndexY = endPtsHistogramY[endIndexY];
 				const PxU32 sRegionY = startIndexY / elementsPerRegions;
 				const PxU32 eRegionY = endIndexY / elementsPerRegions;
-	
+
 				//calculate region index in z axis
 				const PxgSapBox1D& sapZ = sapBoxZ[handle];
 				PxU32 startIndexZ = sapZ.mMinMax[0];
@@ -867,7 +867,7 @@ extern "C" __global__ void createRegionsKernel(const PxgBroadPhaseDesc* bpDesc)	
 			}
 			regionAccum[workIndex] = regionCount;
 		}
-	}  
+	}
 }
 
 template <PxU32 WARP_PERBLOCK_SIZE>
@@ -896,7 +896,7 @@ static __device__ void computeHistogram(PxU32* histogram, PxU32* blockHistogram,
 	{
 		const PxU32 workIndex = i*WARP_SIZE*WARP_PERBLOCK_SIZE + idx + nbIterationsPerBlock * blockIdx.x * blockDim.x;
 
-		PxU32 histVal = 0; 
+		PxU32 histVal = 0;
 		if(workIndex < maxWorkIndex)
 			histVal = histogram[workIndex];
 
@@ -908,7 +908,7 @@ static __device__ void computeHistogram(PxU32* histogram, PxU32* blockHistogram,
 		const PxU32 prevBlockAccumulator = sBlockAccumulator;
 
 		__syncthreads();
-		
+
 		unsigned mask_idx = __ballot_sync(FULL_MASK, idx < WARP_PERBLOCK_SIZE);
 		if(idx < WARP_PERBLOCK_SIZE)
 		{
@@ -918,7 +918,7 @@ static __device__ void computeHistogram(PxU32* histogram, PxU32* blockHistogram,
 			if(threadIndexInWarp == (WARP_PERBLOCK_SIZE-1))
 				sBlockAccumulator += (output + value);
 		}
-		
+
 		__syncthreads();
 
 		if(workIndex < maxWorkIndex)
@@ -941,7 +941,7 @@ static __device__ void outputHistogram(PxU32* histogram, const PxU32* blockHisto
 
 	const PxU32 globalThreadIndex = threadIdx.x + blockDim.x*blockIdx.x;
 
-	const PxU32 threadIndexInWarp = threadIdx.x&(WARP_SIZE-1);  
+	const PxU32 threadIndexInWarp = threadIdx.x&(WARP_SIZE-1);
 
 	PxU32 val = 0;
 	PxU32 res = 0;
@@ -960,7 +960,7 @@ static __device__ void outputHistogram(PxU32* histogram, const PxU32* blockHisto
 	const PxU32 numIterationPerBlock = (totalBlockRequired + (BLOCK_SIZE-1))/ BLOCK_SIZE;
 
 	__syncthreads();
-	
+
 	PxU32 blockAccum = sBlockAccum[blockIdx.x];
 
 	for(PxU32 i=0; i<numIterationPerBlock; ++i)
@@ -1002,7 +1002,7 @@ extern "C" __global__ void computeRegionsHistogram(const PxgBroadPhaseDesc* bpDe
 
 	const PxU32 numHandles = bpDesc->numPreviousHandles + bpDesc->numCreatedHandles - bpDesc->numRemovedHandles;
 	const PxU32 nbProjections = numHandles * 2;
-	
+
 	computeHistogram<PxgBPKernelBlockDim::BP_COMPUTE_REGION_HISTOGRAM/WARP_SIZE>(regionAccum, blockRegionAccum, nbProjections);
 }
 
@@ -1058,7 +1058,7 @@ extern "C" __global__ void writeOutStartAndActiveRegionHistogram(const PxgBroadP
 			const PxU32 sRegionY = minRange.y;
 			const PxU32 sRegionZ = minRange.z;
 			const PxU32 eRegionZ = maxRange.z;
-			
+
 			const PxU32 nbZRegions = (eRegionZ - sRegionZ) + 1;
 			const PxU32 zRegion = (offset % nbZRegions) + sRegionZ;
 			const PxU32 yRegion = (offset / nbZRegions) + sRegionY;
@@ -1111,11 +1111,11 @@ extern "C" __global__ void computeStartAndActiveRegionHistogram(const PxgBroadPh
 
 		PxU32* activeRegionsHistogram = &bpDesc->activeRegionsHistogram[regionStartOffset];
 		PxU32* startRegionsHistogram = &bpDesc->startRegionsHistogram[regionStartOffset];
-		   
+
 		for(PxU32 i = 0; i < nbIterationsPerBlock; ++i)
 		{
 			const PxU32 workIndex = i*WARP_SIZE*BP_ACTIVE_HISTOGRAM_WARPS + idx /*+ nbIterationsPerBlock * blockIdx.x * blockDim.x*/;
-			
+
 			PxU32 activeHistVal = 0;
 			PxU32 startHistVal = 0;
 			if(workIndex < nbProjections)
@@ -1143,7 +1143,7 @@ extern "C" __global__ void computeStartAndActiveRegionHistogram(const PxgBroadPh
 					PxU32 value = sStartWarpAccumulator[threadIndexInWarp];
 
 					const PxU32 output = warpScanAddWriteToSharedMem<BP_ACTIVE_HISTOGRAM_WARPS>(mask_threadIndexInWarp, threadIndexInWarp, threadIndexInWarp, sStartWarpAccumulator, value, value);
-					
+
 					if(threadIndexInWarp == (BP_ACTIVE_HISTOGRAM_WARPS-1))
 					{
 						const PxU32 res = output + value;
@@ -1154,7 +1154,7 @@ extern "C" __global__ void computeStartAndActiveRegionHistogram(const PxgBroadPh
 			}
 
 			__syncthreads();
-			
+
 			//out put OrderedActiveRegionHistogram
 			if(workIndex < nbProjections)
 			{
@@ -1167,7 +1167,7 @@ extern "C" __global__ void computeStartAndActiveRegionHistogram(const PxgBroadPh
 				const PxU32 startIndex = startAccum + prevStartBlockAccumulator;
 
 				activeRegionsHistogram[workIndex] = activeIndex;
-				startRegionsHistogram[workIndex] = startIndex;  
+				startRegionsHistogram[workIndex] = startIndex;
 			}
 		}
 	}
@@ -1215,7 +1215,7 @@ extern "C" __global__ void outputOrderedActiveRegionHistogram(const PxgBroadPhas
 			const PxU32 sRegionY = minRange.y;
 			const PxU32 sRegionZ = minRange.z;
 			const PxU32 eRegionZ = maxRange.z;
-			
+
 			const PxU32 nbZRegions = (eRegionZ - sRegionZ) + 1;
 			const PxU32 zRegion = (offset % nbZRegions) + sRegionZ;
 			const PxU32 yRegion = (offset / nbZRegions) + sRegionY;
@@ -1228,10 +1228,10 @@ extern "C" __global__ void outputOrderedActiveRegionHistogram(const PxgBroadPhas
 			PxU32* orderedStartHandles = &bpDesc->orderedStartRegionHandles[regionStartOffset];
 
 			const PxgSapBox1D& sapBox = sapBoxes[handle];
-					
+
 			const PxU32 startProjIndex = sapBox.mMinMax[0];
-			const PxU32 startIndex = startRegionsHistogram[startProjIndex]; 
-		
+			const PxU32 startIndex = startRegionsHistogram[startProjIndex];
+
 			if (eRegionZ >= sRegionZ)
 			{
 				//Output to orderedStartHandles
@@ -1252,7 +1252,7 @@ extern "C" __global__ void writeOutOverlapChecksForInsertedBoundsRegionsHistogra
 {
 	const PxU32 numHandles = bpDesc->numPreviousHandles + bpDesc->numCreatedHandles - bpDesc->numRemovedHandles;
 	const PxU32 nbProjections = numHandles * 2 ;
-	
+
 	const PxgSapBox1D* boxSapBox1DX = bpDesc->boxSapBox1D[AXIS_X];
 
 	regionOverlapType* overlapChecks = bpDesc->overlapChecksRegion;
@@ -1302,7 +1302,7 @@ extern "C" __global__ void writeOutOverlapChecksForInsertedBoundsRegionsHistogra
 			const PxU32 sRegionZ = minRange.z;
 			const PxU32 eRegionY = maxRange.y;
 			const PxU32 eRegionZ = maxRange.z;
-			
+
 			const PxU32 nbZRegions = (eRegionZ - sRegionZ) + 1;
 			const PxU32 nbYRegions = (eRegionY - sRegionY) + 1;
 			const PxU32 zRegion = (offset % nbZRegions) + sRegionZ;
@@ -1312,7 +1312,7 @@ extern "C" __global__ void writeOutOverlapChecksForInsertedBoundsRegionsHistogra
 			const PxU32 regionIndex =(xRegion + yRegion*REGION_SIZE_PER_AXIS+ zRegion*(REGION_SIZE_PER_AXIS*REGION_SIZE_PER_AXIS)) * nbProjections;
 
 			const PxU32* startEndPtHistogram = isNew ? (&bpDesc->startRegionsHistogram[regionIndex]) : (&bpDesc->activeRegionsHistogram[regionIndex]);
-			
+
 			const PxU32 regionStartIndex = startEndPtHistogram[boxStartIndexX +1];
 			const PxU32 regionEndIndex = startEndPtHistogram[boxEndIndexX];
 
@@ -1381,7 +1381,7 @@ extern "C" __global__ void computeOverlapChecksForRegionsHistogram(const PxgBroa
 			sPairWarpCount[warpIndexInBlock] = pairCount + nbComparision;
 			//CHECK64(sPairWarpCount[warpIndexInBlock])	// PT: this one doesn't fire
 		}
-	
+
 		__syncthreads();
 
 		// PT: there is no evidence that value and res must be 64bit but they are involved in 64bit accumulations
@@ -1434,13 +1434,13 @@ extern "C" __global__ void outputOverlapChecksForRegionHistogram(PxgBroadPhaseDe
 
 	const PxU32 idx = threadIdx.x;
 
-	const PxU32 threadIndexInWarp = threadIdx.x&(WARP_SIZE-1);  
+	const PxU32 threadIndexInWarp = threadIdx.x&(WARP_SIZE-1);
 
 	const PxU32 globalThreadIndex = threadIdx.x + blockDim.x*blockIdx.x;
 
 	const regionOverlapType* blockOverlapChecks = bpDesc->blockOverlapChecksRegion;
 
-	//exclusive accumulation 
+	//exclusive accumulation
 	regionOverlapType* overlapChecks = bpDesc->overlapChecksRegion;
 
 	ltype res = 0;	// PT: must be 64bit because of overflow below (1)
@@ -1540,7 +1540,7 @@ extern "C" __global__ void performIncrementalSAP(PxgBroadPhaseDesc* bpDesc)	// B
 		sRanks = bpDesc->boxProjectionRanks[blockIdx.y];
 		//sRanks[threadIdx.x] = bpDesc->boxProjectionRanks[threadIdx.x];
 		//sSortedHandles[threadIdx.x][0] = bpDesc->boxTempHandles[threadIdx.x];
-		//sSortedHandles[threadIdx.x] = bpDesc->boxHandles[0][threadIdx.x]; 
+		//sSortedHandles[threadIdx.x] = bpDesc->boxHandles[0][threadIdx.x];
 		sSortedHandles = bpDesc->boxHandles[0][blockIdx.y];
 
 		sStartEndAccum[0][0] = bpDesc->startPtHistogram[0][blockIdx.y];//this frame's start projections
@@ -1552,7 +1552,7 @@ extern "C" __global__ void performIncrementalSAP(PxgBroadPhaseDesc* bpDesc)	// B
 		sStartEndHandles[0][1] = bpDesc->startPointHandles[1][blockIdx.y];//last frame's start projections
 		sStartEndHandles[1][0] = bpDesc->endPointHandles[0][blockIdx.y]; //this frame's end projections
 		sStartEndHandles[1][1] = bpDesc->endPointHandles[1][blockIdx.y]; //Last frame's end projections
-	
+
 		sFoundOrLost[0] = bpDesc->foundPairReport;
 		sFoundOrLost[1] = bpDesc->lostPairReport;
 		sAabbs[0] = bpDesc->newIntegerBounds;
@@ -1623,7 +1623,7 @@ extern "C" __global__ void performIncrementalSAP(PxgBroadPhaseDesc* bpDesc)	// B
 
 				downPass = prevIndex > index;
 
-				const PxU32 startIndex = downPass ? index : prevIndex+1;		
+				const PxU32 startIndex = downPass ? index : prevIndex+1;
 
 				const PxU32 willFindPair = (!isStartHandle) ^ downPass;
 
@@ -1632,7 +1632,7 @@ extern "C" __global__ void performIncrementalSAP(PxgBroadPhaseDesc* bpDesc)	// B
 				//Up sweeps sweep against the previous sorted handle list. Down-sweeps sweep against the new sorted handle list. This avoids missing any pairs
 				//const PxU32 otherSortedHandle = sortedHandles[axis][1-downPass][processIndex];
 
-				//otherHandle = getHandle(otherSortedHandle);		
+				//otherHandle = getHandle(otherSortedHandle);
 
 				const PxU32* startEndAccum = sStartEndAccum[isStartHandle][downPass];
 				const PxU32* startEndHandles = sStartEndHandles[isStartHandle][downPass];
@@ -1654,7 +1654,7 @@ extern "C" __global__ void performIncrementalSAP(PxgBroadPhaseDesc* bpDesc)	// B
 
 					//As the logic for found/lost pairs is inversed based on whether we're doing an up or down-sweep, we must invert the new/old bounds to make sure that the
 					//overlap logic functions correctly
-					
+
 					const PxgIntegerAABB* aabbs0 = sAabbs[1-willFindPair];
 					const PxgIntegerAABB* aabbs1 = sAabbs[willFindPair];
 
@@ -1687,7 +1687,7 @@ extern "C" __global__ void performIncrementalSAP(PxgBroadPhaseDesc* bpDesc)	// B
 				sFoundAccum[0][warpIndex] = res0 + val0;
 				sFoundAccum[1][warpIndex] = res1 + val1;
 			}
-			 
+
 			__syncthreads();
 
 			const unsigned mask_warpIndex = __ballot_sync(FULL_MASK, warpIndex < 2 && threadIndexInWarp < WARP_PERBLOCK_SIZE);
@@ -1757,7 +1757,7 @@ extern "C" __global__ void generateFoundPairsForNewBoundsRegion(PxgBroadPhaseDes
 	__syncthreads();
 
 	const PxgIntegerRegion* regionRange = bpDesc->regionRange;
-	
+
 	const PxU32* boxGroups = bpDesc->updateData_groups;
 #if USE_ENV_IDS
 	const PxU32* boxEnvIDs = bpDesc->updateData_envIDs;
@@ -1772,7 +1772,7 @@ extern "C" __global__ void generateFoundPairsForNewBoundsRegion(PxgBroadPhaseDes
 	const PxU32 overlCheckesSize = bpDesc->regionAccumTotal;
 
 	const PxgHandleRegion* handleRegions = bpDesc->overlapChecksHandleRegiones;
-	
+
 	const ltype totalPair = bpDesc->overlapChecksTotalRegion;
 	//CHECK64(totalPair)	// PT: this one fires so overlapChecksTotalRegion must be 64bit
 
@@ -1786,7 +1786,7 @@ extern "C" __global__ void generateFoundPairsForNewBoundsRegion(PxgBroadPhaseDes
 	//printf("max_found_lost_pair %d\n", max_found_lost_pair);
 
 	for(ltype i=0; i<numIterationPerBlock; ++i)	// PT: using 64bit for the index because numIterationPerBlock is 64bit
-	{	
+	{
 		const ltype workIndex = i*blockDim.x + threadIdx.x + numIterationPerBlock * blockIdx.x * blockDim.x;
 		//CHECK64(workIndex)	// PT: this one fires so workIndex must be 64bit
 
@@ -1818,10 +1818,10 @@ extern "C" __global__ void generateFoundPairsForNewBoundsRegion(PxgBroadPhaseDes
 
 			const PxU32* startEndPtHistogramRegion = &sStartEndPtHistograms[isNew][regionIndex];
 			const PxU32* orderedStartHandlesRegion = &sOrderedStartRegionHandles[isNew][regionIndex];
-							
+
 			const PxU32 regionStartIndex = startEndPtHistogramRegion[boxStartIndexX +1];
 			const PxU32 regionEndIndex = startEndPtHistogramRegion[boxEndIndexX];
-			
+
 			if(regionEndIndex > regionStartIndex)
 			{
 				const ltype otherIndex = regionStartIndex + offset;
@@ -1836,7 +1836,7 @@ extern "C" __global__ void generateFoundPairsForNewBoundsRegion(PxgBroadPhaseDes
 					otherHandle = orderedStartHandlesRegion[otherIndex];
 
 					const uint4 minRange = range.minRange;
-		
+
 					const PxgIntegerRegion& otherRange = regionRange[otherHandle];
 					const uint4 otherMinRange = otherRange.minRange;
 
@@ -1845,7 +1845,7 @@ extern "C" __global__ void generateFoundPairsForNewBoundsRegion(PxgBroadPhaseDes
 					const PxU32 z = PxMax(minRange.z, otherMinRange.z);
 
 					const PxU32 otherRegionIndex = (x + y*REGION_SIZE_PER_AXIS + z *(REGION_SIZE_PER_AXIS*REGION_SIZE_PER_AXIS)) * nbProjections;
-					
+
 					if(regionIndex == otherRegionIndex)
 					{
 						const PxU32 otherGroup = boxGroups[otherHandle];
@@ -1858,15 +1858,15 @@ extern "C" __global__ void generateFoundPairsForNewBoundsRegion(PxgBroadPhaseDes
 						{
 							const PxgIntegerAABB& iaabb = newBounds[handle];
 
-							const PxgIntegerAABB& iotherAABB = newBounds[otherHandle]; 
+							const PxgIntegerAABB& iotherAABB = newBounds[otherHandle];
 
 							foundCount = iaabb.intersects(iotherAABB);
 						}
 					}
 				}
-			}  
+			}
 		}
-	
+
 		ltype2 res = warpScanAdd<WARP_SIZE>(FULL_MASK, threadIdx.x, threadIndexInWarp, sFoundPairsCount, foundCount, foundCount);
 		//CHECK64(res)	// PT: this one does not fire
 		if(threadIndexInWarp == (WARP_SIZE-1))
@@ -1917,10 +1917,10 @@ extern "C" __global__ void generateFoundPairsForNewBoundsRegion(PxgBroadPhaseDes
 extern "C" __global__ void clearNewFlagLaunch(const PxgBroadPhaseDesc* bpDesc)	// BP_CLEAR_NEWFLAG //###ONESHOT
 {
 	const PxU32 numCreatedHandleSize = bpDesc->numCreatedHandles;
-	
+
 	const PxU32* createdHandles = bpDesc->updateData_createdHandles;
 	//PxU32* updatedHandles = bpDesc->updatedHandles;
-	
+
 	const PxgSapBox1D* boxSapBox1DX = bpDesc->boxSapBox1D[AXIS_X];
 	const PxgSapBox1D* boxSapBox1DY = bpDesc->boxSapBox1D[AXIS_Y];
 	const PxgSapBox1D* boxSapBox1DZ = bpDesc->boxSapBox1D[AXIS_Z];
@@ -1952,7 +1952,7 @@ extern "C" __global__ void clearNewFlagLaunch(const PxgBroadPhaseDesc* bpDesc)	/
 extern "C" __global__ void computeIncrementalComparisonHistograms_Stage1(const PxgBroadPhaseDesc* bpDesc)	// BP_COMPUTE_INCREMENTAL_CMP_COUNTS1
 {
 	const PxU32 WARP_PERBLOCK_SIZE = PxgBPKernelBlockDim::BP_COMPUTE_INCREMENTAL_CMP_COUNTS1/WARP_SIZE;
-	
+
 	//const PxU32 numHandles = bpDesc->numPreviousHandles + bpDesc->numCreatedHandles - bpDesc->numRemovedHandles;
 	const PxU32 numHandles = bpDesc->numPreviousHandles;
 	PxU32 nbProjections = numHandles * 2;
@@ -2102,7 +2102,7 @@ extern "C" __global__ void computeIncrementalComparisonHistograms_Stage1(const P
 				const PxU32 res = warpScanAddWriteToSharedMem<WARP_PERBLOCK_SIZE>(mask_threadIndexInWarp, threadIndexInWarp, threadIndexInWarp, sBlockAccum1, val, val);
 				if(threadIndexInWarp == (WARP_PERBLOCK_SIZE-1))
 					sAccum1 += val+res;
-			}	
+			}
 		}
 		else if (warpIndex == 2)
 		{
@@ -2285,7 +2285,7 @@ extern "C" __global__ void updateHandles(const PxgBroadPhaseDesc* bpDesc)	// BP_
 
 //compute aggregate/actor pairs
 //aggFoundPairs blockIdx.y == 0, aggLostPairs blockIdx.y == 2
-//actorFoundPairs blockIdx.y == 1, actorFoundPairs blockIdx.y == 3 
+//actorFoundPairs blockIdx.y == 1, actorFoundPairs blockIdx.y == 3
 extern "C" __global__ void accumulateReportsStage_1(const PxgBroadPhaseDesc* bpDesc)	// BP_ACCUMULATE_REPORT_STAGE_1 //###ONESHOT
 {
 	const PxU32 nbPairs = (blockIdx.y / 2 == 0) ? bpDesc->sharedFoundPairIndex : bpDesc->sharedLostPairIndex;
@@ -2293,7 +2293,7 @@ extern "C" __global__ void accumulateReportsStage_1(const PxgBroadPhaseDesc* bpD
 	const PxgBroadPhasePair* pairs = (blockIdx.y / 2 == 0) ? bpDesc->foundPairReport : bpDesc->lostPairReport;
 
 	const bool outputAggReport = ((blockIdx.y % 2) == 0) ? true : false;
-	
+
 	const PxU32 maxPairs = bpDesc->max_found_lost_pairs;
 	const PxU32 nbPairsSafe = PxMin(nbPairs, maxPairs);
 
@@ -2346,7 +2346,7 @@ extern "C" __global__ void accumulateReportsStage_1(const PxgBroadPhaseDesc* bpD
 				isActor = true;
 		}
 
-		//There is an aggregate or an actor 
+		//There is an aggregate or an actor
 		const bool valToBallot = outputAggReport ? isAgg : isActor;
 		const PxU32 accum = __popc(__ballot_sync(FULL_MASK, valToBallot));
 
@@ -2383,7 +2383,7 @@ extern "C" __global__ void accumulateReportsStage_1(const PxgBroadPhaseDesc* bpD
 }
 
 //aggFoundPairs blockIdx.y == 0, aggLostPairs blockIdx.y == 2
-//actorFoundPairs blockIdx.y == 1, actorFoundPairs blockIdx.y == 3 
+//actorFoundPairs blockIdx.y == 1, actorFoundPairs blockIdx.y == 3
 extern "C" __global__ void accumulateReportsStage_2(PxgBroadPhaseDesc* bpDesc)	// BP_ACCUMULATE_REPORT_STAGE_2 //###ONESHOT
 {
 	const bool outputAggReport = ((blockIdx.y % 2) == 0);
@@ -2527,7 +2527,7 @@ extern "C" __global__ void accumulateReportsStage_2(PxgBroadPhaseDesc* bpDesc)	/
 	}
 
 	const PxU32 nbPairsSafe = PxMin(nbPairs, bpDesc->max_found_lost_pairs); // AD: pairs buffer is sized according to this, aggregate count is not considered.
-	
+
 	const Bp::VolumeData* volumeData = bpDesc->aabbMngr_volumeData;
 
 	const PxU32 totalBlockRequired = (nbPairs + (blockDim.x - 1)) / blockDim.x;
@@ -2616,7 +2616,7 @@ extern "C" __global__ void accumulateReportsStage_2(PxgBroadPhaseDesc* bpDesc)	/
 	}
 }
 
-//copy found and lost reports to the mapped memory 
+//copy found and lost reports to the mapped memory
 extern "C" __global__ void copyReports(PxgBroadPhaseDesc* bpDesc)	// BP_COPY_REPORTS //###ONESHOT
 {
 	const PxU32 max_found_lost_pairs = bpDesc->max_found_lost_pairs;
@@ -2624,7 +2624,7 @@ extern "C" __global__ void copyReports(PxgBroadPhaseDesc* bpDesc)	// BP_COPY_REP
 	// sharedFoundPairIndex will contain the number of pairs needed, this is coming directly from the part of the broadphase
 	// that does not know about aggregates. The sharedFoundAggPairIndex is already corrected and will contain the actual number
 	// of aggregate pairs in the pairs list.
-	// this means that we need to correct the total size to account for the max size of the pairs buffer, and can then 
+	// this means that we need to correct the total size to account for the max size of the pairs buffer, and can then
 	// subtract the number of aggregate pairs written to that buffer to get the final actor count.
 	const PxU32 nbCreatedPairs = PxMin(bpDesc->sharedFoundPairIndex, max_found_lost_pairs) - bpDesc->sharedFoundAggPairIndex;
 	const PxU32 nbLostPairs = PxMin(bpDesc->sharedLostPairIndex, max_found_lost_pairs) - bpDesc->sharedLostAggPairIndex;

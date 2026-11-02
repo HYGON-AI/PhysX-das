@@ -1,0 +1,81 @@
+# Normalize text files to LF in the repository and in the working tree.
+# Native line endings are not required by any platform this project targets,
+# and mixed line endings break the automated compliance scanners.
+* text=auto eol=lf
+
+# Binary assets that must never be line-ending normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.bmp binary
+*.tga binary
+*.dds binary
+*.exr binary
+*.hdr binary
+*.ktx binary
+*.bin binary
+*.so binary
+*.so.* binary
+*.dylib binary
+*.dll binary
+*.lib binary
+*.a binary
+*.o binary
+*.obj binary
+*.hsaco binary
+*.cubin binary
+*.ptx binary
+*.class binary
+*.jar binary
+*.zip binary
+*.gz binary
+*.tgz binary
+*.bz2 binary
+*.xz binary
+*.7z binary
+*.pdf binary
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.ppt binary
+*.pptx binary
+*.fbx binary
+*.usd binary
+*.usda text
+*.usdc binary
+*.usdz binary
+*.mesh binary
+*.sqlite binary
+*.db binary
+
+# Git LFS pointer files must keep their exact bytes.
+*.psd -text
+*.psb -text
+
+# Explicit text formats so the intent survives future tooling changes.
+*.c text eol=lf
+*.cc text eol=lf
+*.cpp text eol=lf
+*.cu text eol=lf
+*.cuh text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
+*.hip text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.cmake text eol=lf
+*.cmakein text eol=lf
+CMakeLists.txt text eol=lf
+*.json text eol=lf
+*.xml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.tsv text eol=lf
+*.csv text eol=lf

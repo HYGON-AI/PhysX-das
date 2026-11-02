@@ -24,7 +24,7 @@
 //
 // Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
-// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.  
+// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
 // Copyright (c) 2026 Hygon Information Technology Co., Ltd.
 
 #include "common/PxPhysXCommonConfig.h"
@@ -108,7 +108,7 @@ extern "C" __global__ void ZeroBodies(const PxgSolverCoreDesc* constraintPrepDes
 		motionVelocities[a]					= zero;
 		bodyVelocities[offset + a]			= zero;
 	}
-	
+
 	//(2) Set all velocities to zero. Strictly, we only need to set the first instance of each body
 	// in the solver to 0 but, for now, we'll just initialize them all to zero...
 	for(uint a = threadIndex; a < totalNumBodiesConstraints; a+= blockStride)
@@ -143,7 +143,7 @@ PX_FORCE_INLINE __device__ float4 cudeShuffle3(const PxU32 syncMask, bool condit
 
 // Marking active slabs loosely following "solveBlockPartition"
 static __device__ void markActiveSlab_rigidBodyPGS(
-	const PxgSolverCoreDesc* PX_RESTRICT solverDesc, 
+	const PxgSolverCoreDesc* PX_RESTRICT solverDesc,
 	const PxgSolverSharedDesc<IterativeSolveData>* PX_RESTRICT sharedDesc,
 	const PxU32 islandIndex, const PxU32 lastPartition)
 {
@@ -171,7 +171,7 @@ static __device__ void markActiveSlab_rigidBodyPGS(
 			const PxU32 outputOffset = solverDesc->accumulatedBodyDeltaVOffset; //deltaVOffset
 			const PxU32 numDynamicBodies = solverDesc->islandContextPool->mBodyCount; //nbBodies minus offset!
 			const PxU32 totalBodiesIncKinematics = numDynamicBodies + bodyOffset;
-			
+
 			const PxU32 bodyIdA = batch.bodyAIndex[threadIndexInWarp];
 			const PxU32 bodyIdB = batch.bodyBIndex[threadIndexInWarp];
 
@@ -277,7 +277,7 @@ static __device__ void markActiveSlab_articulationPGS(
 			bool isActiveSlab = false;
 
 			const PxU32 constraintType = batch.constraintType;
-	
+
 			if (constraintType == PxgSolverConstraintDesc::eARTICULATION_CONSTRAINT_1D) // joint
 			{
 				// For joint constraints, simply mark slabs as active for efficiency.
@@ -390,7 +390,7 @@ extern "C" __global__
 void solveBlockPartition(
 	PxgSolverCoreDesc* PX_RESTRICT solverDesc, const PxgSolverSharedDesc<IterativeSolveData>* PX_RESTRICT sharedDesc,
 	const PxU32 islandIndex, const PxU32 partitionIndex, bool doFriction)
-{	
+{
 	const PxgIslandContext& island = solverDesc->islandContextPool[islandIndex];
 
 	const PxU32 startPartitionIndex = island.mStartPartitionIndex;
@@ -484,7 +484,7 @@ void solveBlockPartition(
 
 			if (batch.constraintType == PxgSolverConstraintDesc::eCONTACT)
 				solveContactBlock(batch, lv0, av0, lv1, av1, doFriction, threadIndexInWarp, iterativeData.blockContactHeaders, iterativeData.blockFrictionHeaders,
-					iterativeData.blockContactPoints, iterativeData.blockFrictions, residualAccumulationEnabled ? &error : NULL, 
+					iterativeData.blockContactPoints, iterativeData.blockFrictions, residualAccumulationEnabled ? &error : NULL,
 					curRef0, curRef1);
 			else
 				solve1DBlock(batch, lv0, av0, lv1, av1, threadIndexInWarp, iterativeData.blockJointConstraintHeaders, iterativeData.blockJointConstraintRowsCon,
@@ -493,7 +493,7 @@ void solveBlockPartition(
 
 			const PxU32 remapA = batch.remappedBodyAIndex[threadIndexInWarp];
 			const PxU32 remapB = batch.remappedBodyBIndex[threadIndexInWarp];
-			
+
 			const PxU32 indexA = ComputeBodyBatchStartIndex(remapA);
 			const PxU32 indexB = ComputeBodyBatchStartIndex(remapB);
 
@@ -505,7 +505,7 @@ void solveBlockPartition(
 
 		//KS - Even threads in a warp output the linear velocities, odd threads output the angular velocities.
 		//We output for threadIndexInWarp/2 and 16 + threadIndexInWarp/2
-		
+
 #if 0
 		const PxU32 firstWarpOutput = threadIndexInWarp/2;
 		const PxU32 secondWarpOutput = threadIndexInWarp/2 + 16;
@@ -545,13 +545,13 @@ void solveBlockPartition(
 }
 
 extern "C" __global__ void writebackBlocks(
-	PxgSolverCoreDesc* constraintPrepDesc, 
+	PxgSolverCoreDesc* constraintPrepDesc,
 	PxgSolverSharedDesc<IterativeSolveData>* sharedDesc, const PxU32 islandIndex)
-{	
+{
 	PxgIslandContext& island = constraintPrepDesc->islandContextPool[islandIndex];
 
 	const PxU32 startIndex = island.mBatchStartIndex;
-	const PxU32 endIndex = island.mBatchCount + island.mArtiBatchCount + island.mStaticArtiBatchCount + 
+	const PxU32 endIndex = island.mBatchCount + island.mArtiBatchCount + island.mStaticArtiBatchCount +
 		island.mSelfArtiBatchCount + island.mStaticRigidBatchCount + startIndex;
 
 	const uint warpSize = 32;
@@ -647,14 +647,14 @@ extern "C" __global__ void writebackBlocks(
 extern "C" __global__ void concludeBlocks(
 	PxgSolverCoreDesc* constraintPrepDesc,
 	PxgSolverSharedDesc<IterativeSolveData>* sharedDesc, const PxU32 islandIndex)
-{	
+{
 	PxgIslandContext& island = constraintPrepDesc->islandContextPool[islandIndex];
 
 	const PxU32 startIndex = island.mBatchStartIndex;
-	const PxU32 endIndex = island.mBatchCount + island.mArtiBatchCount + island.mStaticArtiBatchCount 
+	const PxU32 endIndex = island.mBatchCount + island.mArtiBatchCount + island.mStaticArtiBatchCount
 		+ island.mSelfArtiBatchCount + island.mStaticRigidBatchCount + startIndex;
 
-	
+
 
 	const uint warpSize = 32;
 
@@ -677,7 +677,7 @@ extern "C" __global__ void concludeBlocks(
 	PxgBlockSolverContactFriction* frictions = sharedDesc->iterativeData.blockFrictions;
 
 	//for(uint k = startIndex + warpIndex; k < endIndex; k+=blockStride)
-	uint k = startIndex + warpIndex; 
+	uint k = startIndex + warpIndex;
 	if(k < endIndex)
 	{
 		//Get block header
@@ -700,7 +700,7 @@ extern "C" __global__ void concludeBlocks(
 extern "C" __global__ void writeBackBodies(
 	const PxgSolverCoreDesc* constraintPrepDesc,
 	const PxgSolverSharedDesc<IterativeSolveData>* sharedDesc, const PxU32 islandIndex)
-{	
+{
 	__shared__ float4* bodyVelocities;
 	__shared__ float4* motionVelocities;
 	__shared__ PxU32 bodyStartIndex;
@@ -1052,7 +1052,7 @@ void solveStaticBlock(
 				////if(startContactIndex == (solverDesc->numBatches))
 				////if(warpScanExclusive(iterativeData.blockConstraintBatch[startContactIndex].mask, threadIndexInWarp) == 0)
 				//{
-				//	printf("%i: NumContacts = %i, beforeVel = (%f, %f, %f), afterlinVel = (%f, %f, %f), lv1 (%f, %f, %f), av1(%f, %f, %f), startContactIndex = %i, numBatches = %i\n", 
+				//	printf("%i: NumContacts = %i, beforeVel = (%f, %f, %f), afterlinVel = (%f, %f, %f), lv1 (%f, %f, %f), av1(%f, %f, %f), startContactIndex = %i, numBatches = %i\n",
 				//		globalThreadIdx, contactCount, linVel.x, linVel.y, linVel.z, lv0.x, lv0.y, lv0.z, lv1.x, lv1.y, lv1.z, av1.x, av1.y, av1.z, startContactIndex, solverDesc->numBatches);
 				//}
 

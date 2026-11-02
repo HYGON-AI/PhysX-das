@@ -24,7 +24,7 @@
 //
 // Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
-// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.  
+// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
 // Copyright (c) 2026 Hygon Information Technology Co., Ltd.
 
 #if !defined(__HIPCC__)
@@ -65,7 +65,7 @@ extern "C" __global__ void compressContactStage1(
 
 	__shared__ PxU32 sWarpAccum[warpPerBlock];
 	__shared__ PxU32 sAccum;
-	
+
 	const PxU32 block_size = PxgNarrowPhaseGridDims::COMPRESS_CONTACT;
 
 	const PxU32 totalBlockRequired = (numTotalPairs + (blockDim.x - 1)) / blockDim.x;
@@ -151,13 +151,13 @@ extern "C" __global__ void compressContactStage2(
 	PxU32*							numPairs,						//input
 	PxGpuContactPair*				outputPatchs,					//output
 	const PxU32						maxOutputPatches				//input
-	
+
 )
 {
 	const PxU32 warpPerBlock = PxgNarrowPhaseBlockDims::COMPRESS_CONTACT / WARP_SIZE;
 	const PxU32 block_size = PxgNarrowPhaseGridDims::COMPRESS_CONTACT;
 
-	
+
 	__shared__ PxU32 sWarpAccum[warpPerBlock];
 	__shared__ PxU32 sBlockHistogram[block_size];
 	__shared__ PxU32 sAccum;
@@ -189,7 +189,7 @@ extern "C" __global__ void compressContactStage2(
 			(*numPairs) = result;
 			//printf("blockIdx %i blockNumPairs %i numPairs %i\n", blockIdx.x, blockNumPairs, result);
 		}
-		
+
 	}
 
 
@@ -206,7 +206,7 @@ extern "C" __global__ void compressContactStage2(
 		const PxU32 workIndex = i * blockDim.x + idx + numIterationPerBlock * blockIdx.x * blockDim.x;
 
 		PxU32 nbContacts = 0;
-		
+
 
 		if (workIndex < numTotalPairs)
 		{
@@ -253,7 +253,7 @@ extern "C" __global__ void compressContactStage2(
 			const PxgContactManagerInput& cmInput = inputData[workIndex];
 			const PxsContactManagerOutput& cmOutput = outputData[workIndex];
 			const PxU32 index = offset + prevAccum + sWarpAccum[warpIndex] + blockStartIndex;
-			
+
 			if (index < maxOutputPatches)
 			{
 				PxU32 patchStartIndex = cmOutput.contactPatches - cpuCompressedPatchesBase;
@@ -263,7 +263,7 @@ extern "C" __global__ void compressContactStage2(
 					forceIndex = cmOutput.contactForces - cpuForceBufferBase;
 
 				PxGpuContactPair & contact = outputPatchs[index];
-				
+
 				const PxU32 transformCacheRef0 = cmInput.transformCacheRef0;
 				const PxU32 transformCacheRef1 = cmInput.transformCacheRef1;
 				contact.transformCacheRef0 = transformCacheRef0;

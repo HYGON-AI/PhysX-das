@@ -24,7 +24,7 @@
 //
 // Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
-// Copyright (c) 2001-2004 NovodeX AG. All rights reserved. 
+// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
 // Copyright (c) 2026 Hygon Information Technology Co., Ltd.
 
 #ifndef __SDF_COLLISION_CUH__
@@ -43,7 +43,7 @@ namespace physx
 
 struct PX_ALIGN_PREFIX(16) SparseSDFTexture
 {
-	//Dense info - for coarse resolution background grid	
+	//Dense info - for coarse resolution background grid
 	PxVec3 sdfBoxLower;
 	PxReal sdfDx;
 	PxVec3 sdfBoxHigher;
@@ -135,7 +135,7 @@ public:
 				//Evaluate coarse
 				f *= fineToCoarse;
 				//+0.5: Align with texel center
-				//https://forums.developer.nvidia.com/t/understanding-cuda-texture-2d-linear-interpolation/213924	
+				//https://forums.developer.nvidia.com/t/understanding-cuda-texture-2d-linear-interpolation/213924
 				#if defined(__HIPCC__)
 				return 0.0f;  // TODO: HIP 3D texture sampling
 #else
@@ -152,13 +152,13 @@ public:
 				applySubgridStart(startSlot, f, subgridSize);
 
 				//+0.5: Align with texel center
-				//https://forums.developer.nvidia.com/t/understanding-cuda-texture-2d-linear-interpolation/213924	
+				//https://forums.developer.nvidia.com/t/understanding-cuda-texture-2d-linear-interpolation/213924
 #if defined(__HIPCC__)
 				PxReal v = 0.0f;  // TODO: HIP 3D texture sampling
 #else
 				PxReal v = tex3D<float>(textureSubgrids, f.x + 0.5f, f.y + 0.5f, f.z + 0.5f);
 #endif
-				
+
 				return applySubgridSdfScale(v);
 			}
 		}
@@ -268,7 +268,7 @@ static __device__ PxReal doSegmentSDFCollision(SparseSDFTexture& texture, const 
 	{
 		PxVec3 pC = (1.0f - c) * v0 + c * v1;
 		PxReal distC = PxSdfDistance(texture, pC);
-		
+
 		PxVec3 pD = (1.0f - d) * v0 + d * v1;
 		PxReal distD = PxSdfDistance(texture, pD);
 
@@ -615,7 +615,7 @@ __device__ PxU32 findInterestingTets(PxU32 nbTets, const uint4* tetIndices, cons
 				const PxVec3 b = aToB.transform(PxLoad3(tetVerts[tet.y]));
 				const PxVec3 c = aToB.transform(PxLoad3(tetVerts[tet.z]));
 				const PxVec3 d = aToB.transform(PxLoad3(tetVerts[tet.w]));
-				
+
 				PxVec3 centroid = (a + b + c + d) * 0.25f;
 
 				PxReal distInSDFSpace1 = PxSdfDistance(sdfMesh1, shape2Vertex(centroid, scale1.scale, scale1.rotation));
@@ -625,7 +625,7 @@ __device__ PxU32 findInterestingTets(PxU32 nbTets, const uint4* tetIndices, cons
 					PxMax((c - centroid).magnitudeSquared(), (d - centroid).magnitudeSquared())));
 
 				boundingSphereRadius /= PxMin(scale1.scale.x, PxMin(scale1.scale.y, scale1.scale.z));
-				addToBuffer = distInSDFSpace1 < (boundingSphereRadius + tolerance);				
+				addToBuffer = distInSDFSpace1 < (boundingSphereRadius + tolerance);
 			}
 		}
 
@@ -684,7 +684,7 @@ __device__ PxU32 findInterestingTrianglesA(PxU32 mesh0NbPrimitives, const uint4*
 				PxReal distInSDFSpace1 = PxSdfDistance(sdfMesh1, shape2Vertex(p, scale1.scale, scale1.rotation));
 				addToBuffer = distInSDFSpace1 < tolerance;
 			}
-			else 
+			else
 			{
 				PxVec3 v0, v1, v2;
 				getTriangleVertices(mesh0Ind, mesh0Verts, scale0, aToB, ind, subdivisionLevel, v0, v1, v2);
@@ -735,8 +735,8 @@ __device__ PxU32 findInterestingVertices(PxU32 nbVertices, const float4* positio
 		if (ind < nbVertices)
 		{
 			PxVec3 v = aToB.transform(PxLoad3(positions[ind]));
-			PxReal distInSDFSpace1 = PxSdfDistance(sdfMesh1, shape2Vertex(v, scale1.scale, scale1.rotation));	
-			addToBuffer = distInSDFSpace1 < tolerance;			
+			PxReal distInSDFSpace1 = PxSdfDistance(sdfMesh1, shape2Vertex(v, scale1.scale, scale1.rotation));
+			addToBuffer = distInSDFSpace1 < tolerance;
 		}
 
 		__syncthreads();

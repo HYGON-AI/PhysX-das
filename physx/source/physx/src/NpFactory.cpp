@@ -24,7 +24,7 @@
 //
 // Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
-// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.  
+// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
 // Copyright (c) 2026 Hygon Information Technology Co., Ltd.
 
 #include "geometry/PxGeometryQuery.h"
@@ -73,7 +73,7 @@ NpFactory::NpFactory() :
 	, mMaterialPool("MaterialPool")
 #if PX_SUPPORT_PVD
 	, mNpFactoryListener(NULL)
-#endif	
+#endif
 {
 }
 
@@ -200,7 +200,7 @@ void NpFactory::addArticulation(PxArticulationReducedCoordinate* npArticulation,
 void NpFactory::releaseArticulationToPool(PxArticulationReducedCoordinate& articulation)
 {
 	PX_ASSERT(articulation.getBaseFlags() & PxBaseFlag::eOWNS_MEMORY);
-	
+
 	PX_ASSERT(articulation.getConcreteType() == PxConcreteType::eARTICULATION_REDUCED_COORDINATE);
 	PxMutex::ScopedLock lock(mArticulationRCPoolLock);
 	mArticulationRCPool.destroy(static_cast<NpArticulationReducedCoordinate*>(&articulation));
@@ -234,7 +234,7 @@ NpArticulationLink* NpFactory::createNpArticulationLink(NpArticulationReducedCoo
 {
 	NpArticulationLink* npArticulationLink;
 	{
-		PxMutex::ScopedLock lock(mArticulationLinkPoolLock);		
+		PxMutex::ScopedLock lock(mArticulationLinkPoolLock);
 		npArticulationLink = mArticulationLinkPool.construct(pose, root, parent);
 	}
 	return npArticulationLink;
@@ -252,7 +252,7 @@ PxArticulationLink* NpFactory::createArticulationLink(NpArticulationReducedCoord
 {
 	PX_CHECK_AND_RETURN_NULL(pose.isValid(),"Supplied articulation link pose is not valid. Articulation link creation method returns NULL.");
 	PX_CHECK_AND_RETURN_NULL((!parent || (&parent->getRoot() == &root)), "specified parent link is not part of the destination articulation. Articulation link creation method returns NULL.");
-	
+
 	NpArticulationLink* npArticulationLink = NpFactory::getInstance().createNpArticulationLink(root, parent, pose);
 	if (!npArticulationLink)
 	{
@@ -265,18 +265,18 @@ PxArticulationLink* NpFactory::createArticulationLink(NpArticulationReducedCoord
 	{
 		PxTransform parentPose = parent->getCMassLocalPose().transformInv(pose);
 		PxTransform childPose = PxTransform(PxIdentity);
-						
+
 		npArticulationJoint = root.createArticulationJoint(*parent, parentPose, *npArticulationLink, childPose);
 		if (!npArticulationJoint)
 		{
 			PX_DELETE(npArticulationLink);
-	
+
 			PxGetFoundation().error(PxErrorCode::eINTERNAL_ERROR, PX_FL, "Articulation link initialization failed due to joint creation failure: returned NULL.");
 			return NULL;
 		}
 
 		npArticulationLink->setInboundJoint(*npArticulationJoint);
-	}	
+	}
 	return npArticulationLink;
 }
 
@@ -300,8 +300,8 @@ void NpFactory::releaseArticulationJointRCToPool(NpArticulationJointReducedCoord
 }
 
 NpArticulationMimicJoint* NpFactory::createNpArticulationMimicJoint
-(const PxArticulationJointReducedCoordinate& jointA, const PxArticulationAxis::Enum axisA, 
- const PxArticulationJointReducedCoordinate& jointB, const PxArticulationAxis::Enum axisB, 
+(const PxArticulationJointReducedCoordinate& jointA, const PxArticulationAxis::Enum axisA,
+ const PxArticulationJointReducedCoordinate& jointB, const PxArticulationAxis::Enum axisB,
  const PxReal gearRatio, const PxReal offset,
  const PxReal naturalFrequency, const PxReal dampingRatio)
 {
@@ -656,10 +656,10 @@ PxMaterial* NpFactory::createMaterial(PxReal staticFriction, PxReal dynamicFrict
 
 	NpMaterial* npMaterial;
 	{
-		PxMutex::ScopedLock lock(mMaterialPoolLock);		
+		PxMutex::ScopedLock lock(mMaterialPoolLock);
 		npMaterial = mMaterialPool.construct(materialData);
 	}
-	return npMaterial;	
+	return npMaterial;
 }
 
 void NpFactory::releaseMaterialToPool(NpMaterial& material)
@@ -675,7 +675,7 @@ void NpFactory::releaseMaterialToPool(NpMaterial& material)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-PxDeformableSurfaceMaterial* NpFactory::createDeformableSurfaceMaterial(PxReal youngs, PxReal poissons, PxReal dynamicFriction, PxReal thickness, 
+PxDeformableSurfaceMaterial* NpFactory::createDeformableSurfaceMaterial(PxReal youngs, PxReal poissons, PxReal dynamicFriction, PxReal thickness,
 	PxReal bendingStiffness, PxReal elasticityDamping, PxReal bendingDamping)
 {
 	PX_CHECK_AND_RETURN_NULL(youngs >= 0.0f, "createDeformableSurfaceMaterial: youngs must be >= 0.");
@@ -767,7 +767,7 @@ void NpFactory::releaseDeformableVolumeMaterialToPool(PxDeformableVolumeMaterial
 
 ///////////////////////////////////////////////////////////////////////////////
 
-PxPBDMaterial* NpFactory::createPBDMaterial(PxReal friction, PxReal damping, PxReal adhesion, PxReal viscosity, PxReal vorticityConfinement, 
+PxPBDMaterial* NpFactory::createPBDMaterial(PxReal friction, PxReal damping, PxReal adhesion, PxReal viscosity, PxReal vorticityConfinement,
 	PxReal surfaceTension, PxReal cohesion, PxReal lift, PxReal drag, PxReal cflCoefficient, PxReal gravityScale)
 {
 #if PX_SUPPORT_GPU_PHYSX
@@ -1079,7 +1079,7 @@ void NpFactory::addCollection(const Collection& collection)
 		{
 			NpAggregate* np = static_cast<NpAggregate*>(s);
 			addAggregate(np, false);
-			// PT: TODO: double-check this.... is it correct?			
+			// PT: TODO: double-check this.... is it correct?
 			for(PxU32 j=0;j<np->getCurrentSizeFast();j++)
 			{
 				PxBase* actor = np->getActorFast(j);

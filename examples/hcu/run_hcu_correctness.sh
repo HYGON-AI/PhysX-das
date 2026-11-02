@@ -31,19 +31,27 @@ set -u
 
 RUNNER_MARKER="PX_DCU_CORRECTNESS_RUNNER_R14_NO_GIT_INSPECTION"
 # Kept so runners delivered before the no-Git-inspection cleanup remain compatible.
+# shellcheck disable=SC2034
 RUNNER_COMPAT_MARKER_R13="PX_DCU_CORRECTNESS_RUNNER_R13_BROADPHASE_UPDATE_COMPACT"
 # Kept so the already-closed cloth P3 evidence helper can still validate this newer runner.
+# shellcheck disable=SC2034
 RUNNER_COMPAT_MARKER_R12="PX_DCU_CORRECTNESS_RUNNER_R12_BROADPHASE_UPDATE_DIAG"
 # Kept so the already-closed P8 and cloth P0/P1/P2 helper scripts can still validate this newer runner.
+# shellcheck disable=SC2034
 RUNNER_COMPAT_MARKER_R11="PX_DCU_CORRECTNESS_RUNNER_R11_PBD_PRIMITIVE_FUSED64"
 # Kept so the already-closed P6/P7 helper scripts can still validate this newer runner.
+# shellcheck disable=SC2034
 RUNNER_COMPAT_MARKER_R10="PX_DCU_CORRECTNESS_RUNNER_R10_PBD_PARTICLE_RANGE_PARALLEL"
 # Kept so the already-closed P5/P6 helper scripts can still validate this newer runner.
+# shellcheck disable=SC2034
 RUNNER_COMPAT_MARKER_R9="PX_DCU_CORRECTNESS_RUNNER_R9_PBD_PRIMITIVE_INLINE"
 # Kept so the already-closed P2/P3/P4 helper scripts can still validate this newer runner.
+# shellcheck disable=SC2034
 RUNNER_COMPAT_MARKER_R8="PX_DCU_CORRECTNESS_RUNNER_R8_PBD_PARTICLE_RANGE_CHUNKED"
 # Kept so the already-closed P2/P3 helper scripts can still validate this newer runner.
+# shellcheck disable=SC2034
 RUNNER_COMPAT_MARKER_R7="PX_DCU_CORRECTNESS_RUNNER_R7_PBD_PARTICLE_RANGE_DIAG"
+# shellcheck disable=SC2034
 RUNNER_COMPAT_MARKER_R6="PX_DCU_CORRECTNESS_RUNNER_R6_PBD_SPATIAL_SORT_DIAG"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

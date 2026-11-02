@@ -1,5 +1,7 @@
 bin/
 probe_hcu
+test_gpucommon
+test_runtime
 compiler/linux-*
 compiler/vc*
 include/PxConfig.h

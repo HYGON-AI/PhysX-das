@@ -58,56 +58,64 @@ PHYSX_ROOT="$PHYSX_SRC/.."
 # These redirect to hip/hip_runtime.h. MUST come first in include order.
 STUBS_DIR="$PHYSX_SRC/gpucommon/src/HCU/stubs"
 
-GPU_INCLUDES="
-    -I$PHYSX_ROOT/source/geomutils/src
-    -I$STUBS_DIR
-    -I$PHYSX_ROOT/include
-    -I$PHYSX_ROOT/source/common/include
-    -I$PHYSX_ROOT/source/gpucommon/include
-    -I$PHYSX_ROOT/source/gpucommon/src/CUDA
-    -I$PHYSX_ROOT/source/gpunarrowphase/include
-    -I$PHYSX_ROOT/source/gpunarrowphase/src/CUDA
-    -I$PHYSX_ROOT/source/gpusolver/include
-    -I$PHYSX_ROOT/source/gpusolver/src/CUDA
-    -I$PHYSX_ROOT/source/gpusimulationcontroller/include
-    -I$PHYSX_ROOT/source/gpusimulationcontroller/src/CUDA
-    -I$PHYSX_ROOT/source/gpubroadphase/include
-    -I$PHYSX_ROOT/source/gpubroadphase/src/CUDA
-    -I$PHYSX_ROOT/source/gpuarticulation/include
-    -I$PHYSX_ROOT/source/gpuarticulation/src/CUDA
-    -I$PHYSX_ROOT/source/cudamanager/include
-    -I$PHYSX_ROOT/source/foundation/include
-    -I$PHYSX_ROOT/source/lowlevel/include
-    -I$PHYSX_ROOT/source/lowlevel/common/include
-    -I$PHYSX_ROOT/source/geomutils/include
-    -I$PHYSX_ROOT/source/physicsgpu/include
-    -I$PHYSX_ROOT/source/simulationcontroller/include
-    -I$PHYSX_ROOT/source/scenequery/include
-    -I$PHYSX_ROOT/source/lowlevel/api/include
-    -I$PHYSX_ROOT/source/lowlevel/software/include
-    -I$PHYSX_ROOT/source/lowlevel/common/include
-    -I$PHYSX_ROOT/source/lowleveldynamics/include
-    -I$PHYSX_ROOT/source/lowleveldynamics/shared
-    -I$PHYSX_ROOT/source/lowlevelaabb/include
-    -I$PHYSX_ROOT/source/geomutils/src/mesh
-    -I$PHYSX_ROOT/source/geomutils/src/gjk
-    -I$PHYSX_ROOT/source/common/src
-    -I$PHYSX_ROOT/include/geometry
-"
+GPU_INCLUDES=(
+    -I"$PHYSX_ROOT/source/geomutils/src"
+    -I"$STUBS_DIR"
+    -I"$PHYSX_ROOT/include"
+    -I"$PHYSX_ROOT/source/common/include"
+    -I"$PHYSX_ROOT/source/gpucommon/include"
+    -I"$PHYSX_ROOT/source/gpucommon/src/CUDA"
+    -I"$PHYSX_ROOT/source/gpunarrowphase/include"
+    -I"$PHYSX_ROOT/source/gpunarrowphase/src/CUDA"
+    -I"$PHYSX_ROOT/source/gpusolver/include"
+    -I"$PHYSX_ROOT/source/gpusolver/src/CUDA"
+    -I"$PHYSX_ROOT/source/gpusimulationcontroller/include"
+    -I"$PHYSX_ROOT/source/gpusimulationcontroller/src/CUDA"
+    -I"$PHYSX_ROOT/source/gpubroadphase/include"
+    -I"$PHYSX_ROOT/source/gpubroadphase/src/CUDA"
+    -I"$PHYSX_ROOT/source/gpuarticulation/include"
+    -I"$PHYSX_ROOT/source/gpuarticulation/src/CUDA"
+    -I"$PHYSX_ROOT/source/cudamanager/include"
+    -I"$PHYSX_ROOT/source/foundation/include"
+    -I"$PHYSX_ROOT/source/lowlevel/include"
+    -I"$PHYSX_ROOT/source/lowlevel/common/include"
+    -I"$PHYSX_ROOT/source/geomutils/include"
+    -I"$PHYSX_ROOT/source/physicsgpu/include"
+    -I"$PHYSX_ROOT/source/simulationcontroller/include"
+    -I"$PHYSX_ROOT/source/scenequery/include"
+    -I"$PHYSX_ROOT/source/lowlevel/api/include"
+    -I"$PHYSX_ROOT/source/lowlevel/software/include"
+    -I"$PHYSX_ROOT/source/lowlevel/common/include"
+    -I"$PHYSX_ROOT/source/lowleveldynamics/include"
+    -I"$PHYSX_ROOT/source/lowleveldynamics/shared"
+    -I"$PHYSX_ROOT/source/lowlevelaabb/include"
+    -I"$PHYSX_ROOT/source/geomutils/src/mesh"
+    -I"$PHYSX_ROOT/source/geomutils/src/gjk"
+    -I"$PHYSX_ROOT/source/common/src"
+    -I"$PHYSX_ROOT/include/geometry"
+)
 
 # Compile flag for hipcc — device-side only check (no linking)
 # -include PxgHIPCompat.h: forces HIP compat header in every translation unit
 #   This provides float4/int4/uint4 types, and maps CUDA intrinsics to HIP.
 #   Eliminates the need to guard every #include <cuda.h> individually.
 # -DPX_HCU_PORT: selects HCU code paths
-HIP_FLAGS="-include PxgHIPCompat.h -DPX_HCU_PORT --offload-arch=$HCU_ARCH -ffast-math -fgpu-flush-denormals-to-zero -c"
+HIP_FLAGS=(
+    -include PxgHIPCompat.h
+    -DPX_HCU_PORT
+    --offload-arch="$HCU_ARCH"
+    -ffast-math
+    -fgpu-flush-denormals-to-zero
+    -c
+)
 
 compile_file() {
     local f=$1
-    local name=$(basename "$f")
+    local name
+    name=$(basename "$f")
     TOTAL=$((TOTAL + 1))
     printf "  [%3d/%3d] %s ... " $TOTAL 0 "$name"
-    if hipcc $HIP_FLAGS $GPU_INCLUDES "$f" -o /dev/null 2>&1; then
+    if hipcc "${HIP_FLAGS[@]}" "${GPU_INCLUDES[@]}" "$f" -o /dev/null 2>&1; then
         echo "PASS"
         PASSED=$((PASSED + 1))
     else
@@ -118,37 +126,37 @@ compile_file() {
 
 # ---- gpucommon (3 .cu files) ----
 echo "--- gpucommon ---"
-for f in $PHYSX_SRC/gpucommon/src/CUDA/*.cu; do
+for f in "$PHYSX_SRC/gpucommon/src/CUDA"/*.cu; do
     compile_file "$f"
 done
 
 # ---- gpubroadphase (2 .cu files) ----
 echo "--- gpubroadphase ---"
-for f in $PHYSX_SRC/gpubroadphase/src/CUDA/*.cu; do
+for f in "$PHYSX_SRC/gpubroadphase/src/CUDA"/*.cu; do
     compile_file "$f"
 done
 
 # ---- gpuarticulation (4 .cu files) ----
 echo "--- gpuarticulation ---"
-for f in $PHYSX_SRC/gpuarticulation/src/CUDA/*.cu; do
+for f in "$PHYSX_SRC/gpuarticulation/src/CUDA"/*.cu; do
     compile_file "$f"
 done
 
 # ---- gpusolver (14 .cu files) ----
 echo "--- gpusolver ---"
-for f in $PHYSX_SRC/gpusolver/src/CUDA/*.cu; do
+for f in "$PHYSX_SRC/gpusolver/src/CUDA"/*.cu; do
     compile_file "$f"
 done
 
 # ---- gpusimulationcontroller (16 .cu files) ----
 echo "--- gpusimulationcontroller ---"
-for f in $PHYSX_SRC/gpusimulationcontroller/src/CUDA/*.cu; do
+for f in "$PHYSX_SRC/gpusimulationcontroller/src/CUDA"/*.cu; do
     compile_file "$f"
 done
 
 # ---- gpunarrowphase (30 .cu files) ----
 echo "--- gpunarrowphase ---"
-for f in $PHYSX_SRC/gpunarrowphase/src/CUDA/*.cu; do
+for f in "$PHYSX_SRC/gpunarrowphase/src/CUDA"/*.cu; do
     compile_file "$f"
 done
 

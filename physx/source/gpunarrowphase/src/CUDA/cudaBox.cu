@@ -24,7 +24,7 @@
 //
 // Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
-// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.  
+// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
 // Copyright (c) 2026 Hygon Information Technology Co., Ltd.
 
 
@@ -137,7 +137,7 @@ template <PxU32 Count>
 struct LocalContacts
 {
 
-	//We can derive localPointA from localPointB as they are aligned to the surface plane. The penetration is 
+	//We can derive localPointA from localPointB as they are aligned to the surface plane. The penetration is
 	//equal to -localPointB.w
 	PxVec3 localPointB[Count];
 };
@@ -172,7 +172,7 @@ static __device__ bool contains(const PxVec3* verts, const PxU32 numVerts, const
 		if (con0 || con1)
 			return true;
 
-		//(verts[i].y > test.y) != (points[j].y > test.y) 
+		//(verts[i].y > test.y) != (points[j].y > test.y)
 		const bool yflag0 = jy > ty;
 		const bool yflag1 = iy > ty;
 
@@ -952,7 +952,7 @@ __device__ PxU32 doBoxBoxGenerateContacts(const PxVec3& box0Extent, const PxVec3
 
 	PxVec3 abs1To0Col = col.abs() + uEps;
 
-	//ub0 
+	//ub0
 	if (threadIndexInGroup < 3)
 	{
 		s = transform1To0.p.dot((&rot1To0.column0)[threadIndexInGroup]);

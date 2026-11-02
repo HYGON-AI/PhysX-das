@@ -24,7 +24,7 @@
 //
 // Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
-// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.  
+// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
 
 #ifndef __CONTACT_PATCH_UTILS_CUH__
 #define __CONTACT_PATCH_UTILS_CUH__
@@ -57,7 +57,7 @@ PX_FORCE_INLINE __device__ PxU32 setContactPointAndForcePointers(PxsContactManag
 			patchAndContactCounters->setOverflowError(PxgPatchAndContactCounters::FORCE_BUFFER_OVERFLOW);
 			forceAndIndiceByteOffset = 0xFFFFFFFF; //overflow
 		}
-	
+
 		if (contactByteOffset != 0xFFFFFFFF)
 		{
 			output->contactForces = reinterpret_cast<PxReal*>(startContactForces + forceAndIndiceByteOffset);
@@ -136,7 +136,7 @@ PX_FORCE_INLINE __device__ PxU32 registerContactPatch(PxsContactManagerOutput* P
 	return patchIndex;
 }
 
-PX_FORCE_INLINE __device__ void insertIntoPatchStream(const PxsMaterialData* PX_RESTRICT materials, PxU8* PX_RESTRICT patchStream, 
+PX_FORCE_INLINE __device__ void insertIntoPatchStream(const PxsMaterialData* PX_RESTRICT materials, PxU8* PX_RESTRICT patchStream,
 	const PxgShape& shape0, const PxgShape& shape1, PxU32 patchIndex, const PxVec3& normal, PxU32 nbContacts)
 {
 	//write to patch to stream

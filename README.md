@@ -9,6 +9,18 @@ Copyright (c) 2026 Hygon Information Technology Co., Ltd.
 This repository is based on NVIDIA PhysX. Modifications for Hygon HCU/HIP
 support are made by Hygon Information Technology Co., Ltd.
 
+### Upstream attribution
+
+| Field | Value |
+|-------|-------|
+| Upstream repository | `https://github.com/NVIDIA-Omniverse/PhysX.git` |
+| Upstream branch | `main` |
+| Upstream tag | `ovphysx-0.4.9` |
+| Upstream commit | `34ce3ed80821f91c88fe02ace9c454280983b50a` |
+| Upstream license | `BSD-3-Clause` |
+
+Modified by Hygon Information Technology Co., Ltd.
+
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
 are met:

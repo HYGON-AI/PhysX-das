@@ -1,4 +1,4 @@
-﻿// Redistribution and use in source and binary forms, with or without
+// Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
 // are met:
 //  * Redistributions of source code must retain the above copyright
@@ -24,7 +24,7 @@
 //
 // Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
-// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.  
+// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
 
 #include "PxgCommonDefines.h"
 #include "common/PxPhysXCommonConfig.h"
@@ -92,7 +92,7 @@ extern "C" __global__ void ZeroBodiesTGS(const PxgSolverCoreDesc* constraintPrep
 	{
 		motionVelocities[a]					= zero;
 	}
-	
+
 	//(2) Set all velocities to zero. Strictly, we only need to set the first instance of each body
 	// in the solver to 0 but, for now, we'll just initialize them all to zero...
 	for(uint a = threadIndex; a < totalNumBodiesConstraints; a+= blockStride)
@@ -104,11 +104,11 @@ extern "C" __global__ void ZeroBodiesTGS(const PxgSolverCoreDesc* constraintPrep
 extern "C" __global__ void writebackBlocksTGS(
 	PxgSolverCoreDesc* constraintPrepDesc,
 	const PxgSolverSharedDesc<IterativeSolveDataTGS>* sharedDesc, const PxU32 islandIndex)
-{	
+{
 	PxgIslandContext& island = constraintPrepDesc->islandContextPool[islandIndex];
 
 	const PxU32 startIndex = island.mBatchStartIndex;
-	const PxU32 endIndex = island.mBatchCount + island.mArtiBatchCount + island.mStaticArtiBatchCount + island.mSelfArtiBatchCount 
+	const PxU32 endIndex = island.mBatchCount + island.mArtiBatchCount + island.mStaticArtiBatchCount + island.mSelfArtiBatchCount
 		+ island.mStaticRigidBatchCount + startIndex;
 
 	const uint warpSize = 32;
@@ -205,12 +205,12 @@ extern "C" __global__ void writebackBlocksTGS(
 extern "C" __global__ void concludeBlocksTGS(
 	const PxgSolverCoreDesc* constraintPrepDesc,
 	const PxgSolverSharedDesc<IterativeSolveDataTGS>* sharedDesc, const PxU32 islandIndex)
-{	
+{
 	PxgIslandContext& island = constraintPrepDesc->islandContextPool[islandIndex];
 
 	const PxU32 startIndex = island.mBatchStartIndex;
 	//const PxU32 endIndex = island.mBatchCount + startIndex;
-	const PxU32 endIndex = island.mBatchCount + island.mArtiBatchCount + 
+	const PxU32 endIndex = island.mBatchCount + island.mArtiBatchCount +
 		island.mStaticArtiBatchCount + island.mSelfArtiBatchCount + startIndex + island.mStaticRigidBatchCount;
 
 	const uint warpSize = 32;
@@ -234,7 +234,7 @@ extern "C" __global__ void concludeBlocksTGS(
 	PxgTGSBlockSolverContactFriction* frictions = sharedDesc->iterativeData.blockFrictions;
 
 	//for(uint k = startIndex + warpIndex; k < endIndex; k+=blockStride)
-	uint k = startIndex + warpIndex; 
+	uint k = startIndex + warpIndex;
 	if(k < endIndex)
 	{
 		//Get block header
@@ -257,7 +257,7 @@ extern "C" __global__ void concludeBlocksTGS(
 extern "C" __global__ void writeBackBodiesTGS(
 	const PxgSolverCoreDesc* solverCoreDesc ,
 	const PxgSolverSharedDesc<IterativeSolveDataTGS>* sharedDesc, const PxU32 islandIndex)
-{	
+{
 	__shared__ float4* bodyVelocities;
 	__shared__ float4* motionVelocities;
 	__shared__ PxU32 bodyOffset;
@@ -276,7 +276,7 @@ extern "C" __global__ void writeBackBodiesTGS(
 	__syncthreads();
 
 	const PxU32 totalBodiesIncKinematics = numDynamicBodies + bodyOffset;
-	
+
 	const PxU32 outputOffset = solverCoreDesc->accumulatedBodyDeltaVOffset;
 
 	const PxReal invDt = sharedDesc->invDtF32;
@@ -310,9 +310,9 @@ extern "C" __global__ void computeAverageSolverBodyVelocityTGS(
 	float4* bodyVelocities = sharedDesc->iterativeData.solverBodyVelPool;
 
 	PxU32* encodedReferenceCount = sharedDesc->iterativeData.solverEncodedReferenceCount;
-	
+
 	const PxU32 numDynamicBodies = solverDesc->islandContextPool->mBodyCount; //nbBodies minus offset!
-	
+
 	const PxU32 numSlabs = solverDesc->numSlabs;
 	const PxU32 numBatches = solverDesc->numBatches;
 	const PxU32 numArticBatches = solverDesc->numArticBatches;
@@ -404,7 +404,7 @@ extern "C" __global__ void computeAverageSolverBodyVelocityTGS(
 				curVel0 = curVel0 * recipRefs;
 				curVel1.x = curVel1.x * recipRefs;
 				curVel1.y = curVel1.y * recipRefs;
-				
+
 				// Resetting rigid body reference count
 				resetSlabCount(bodyOffset + bodyId, solverDesc->numSlabs, numTotalBodies, encodedReferenceCount);
 
@@ -412,14 +412,14 @@ extern "C" __global__ void computeAverageSolverBodyVelocityTGS(
 				curVel1 += vel1;
 
 				//KS - we only need to write out to here if we had any references, otherwise we already
-				//had these variables set in initializeSolverVelocitiesTGS 
+				//had these variables set in initializeSolverVelocitiesTGS
 				bodyVelocities[bodyOffset + outputOffset + bodyId] = curVel0;
 				bodyVelocities[bodyOffset + outputOffset + bodyId + totalBodiesIncKinematics] = curVel1;
 			}
 		}
 	}
 }
-	
+
 extern "C" __global__ void propagateAverageSolverBodyVelocityTGS(
 	const PxgSolverCoreDesc* solverDesc,
 	const PxgSolverSharedDesc<IterativeSolveDataTGS>* sharedDesc, bool isVelocityIteration, bool isLastPosIteration,
@@ -433,7 +433,7 @@ extern "C" __global__ void propagateAverageSolverBodyVelocityTGS(
 	PX_COMPILE_TIME_ASSERT(sizeof(PxgSolverTxIData) % sizeof(PxReal) == 0);
 
 	__shared__ PxReal sIData[(sizeof(PxgSolverTxIData) / sizeof(PxReal)) * (PxgKernelBlockDim::COMPUTE_BODIES_AVERAGE_VELOCITY / WARP_SIZE) * MaxBodiesPerWarp];
-	
+
 	//__shared__ PxgSolverTxIData iData[PxgKernelBlockDim::COMPUTE_BODIES_AVERAGE_VELOCITY / 32][MaxBodiesPerWarp];
 	PxgSolverTxIData* iData = reinterpret_cast<PxgSolverTxIData*>(sIData);
 	//we need to fill in the writeIndex for the solver body data
@@ -483,7 +483,7 @@ extern "C" __global__ void propagateAverageSolverBodyVelocityTGS(
 			float* warpData = reinterpret_cast<float*>(&gIData[i]);
 
 			float tmp = warpData[threadIdx.x & 15];
-			
+
 			assert(PxIsFinite(tmp));
 
 			warpShData[threadIdx.x & 15] = tmp;
@@ -499,10 +499,10 @@ extern "C" __global__ void propagateAverageSolverBodyVelocityTGS(
 		float4 curVel1 = bodyVelocities[outputOffset + bodyId + totalBodiesIncKinematics];
 		float4 curVel2 = bodyVelocities[outputOffset + bodyId + totalBodiesIncKinematics + totalBodiesIncKinematics];
 
-		/*printf("%i: BodyId = %i, index = %i, curVel0 = (%f, %f, %f)\n", 
+		/*printf("%i: BodyId = %i, index = %i, curVel0 = (%f, %f, %f)\n",
 			threadIdx.x, bodyId, outputOffset + bodyId, curVel0.x, curVel0.y, curVel0.z);*/
 
-		//printf("bodyVelocities[%i] (%p) outputOffset = %i (%f, %f, %f, %f)(%f, %f, %f, %f)(%f, %f, %f, %f)\n", bodyId, 
+		//printf("bodyVelocities[%i] (%p) outputOffset = %i (%f, %f, %f, %f)(%f, %f, %f, %f)(%f, %f, %f, %f)\n", bodyId,
 		//	&bodyVelocities[outputOffset + bodyId], outputOffset, curVel0.x, curVel0.y, curVel0.z, curVel0.w,
 		//	curVel1.x, curVel1.y, curVel1.z, curVel1.w, curVel2.x, curVel2.y, curVel2.z, curVel2.w);
 #if 1
@@ -521,7 +521,7 @@ extern "C" __global__ void propagateAverageSolverBodyVelocityTGS(
 
 				const PxgSolverBodyData& data = solverDesc->solverBodyDataPool[bodyId];
 				const PxU32 nodeIndex = data.islandNodeIndex.index();// >> 2;
-				
+
 				PxVec3 angularMotionVel;
 
 				PxVec3 linVel(curVel0.x, curVel0.y, curVel0.z);
@@ -644,7 +644,7 @@ extern "C" __global__ void propagateAverageSolverBodyVelocityTGS(
 			{
 				//If no references, update the deltaP terms to update the positions/velocities. We technically
 				//don't need this unless we have soft bodies or particles in the scene
-				
+
 				bodyVelocities[outputOffset + bodyId + totalBodiesIncKinematics] = curVel1;
 				bodyVelocities[outputOffset + bodyId + totalBodiesIncKinematics + totalBodiesIncKinematics] = curVel2;
 			}
@@ -710,13 +710,13 @@ extern "C" __global__ void initializeSolverVelocitiesTGS(
 	const PxU32 outputOffset = solverDesc->accumulatedBodyDeltaVOffset;
 
 	if (bodyId < allBodiesCount)
-	{		
+	{
 		float4 linVel = velocities[bodyId];
 		float4 angVel = velocities[bodyId + allBodiesCount];
 
 		//printf("%i: bodyId = %i, linVel = (%f, %f, %f)\n", threadIdx.x, bodyId, linVel.x, linVel.y, linVel.z);
 
-		//KS - temporarily zero these until the contact prep code will tolerate having actual pre-solver velocities in the 
+		//KS - temporarily zero these until the contact prep code will tolerate having actual pre-solver velocities in the
 		//velocity buffers
 		//float4 linVel = make_float4(0.f);
 		//float4 angVel = make_float4(0.f);
@@ -922,7 +922,7 @@ __device__ void artiSolveBlockPartitionTGSInternal(
 		{
 			solveExtContactBlockTGS(batch, vel0, vel1, delta0, delta1, threadIndexInWarp,
 				msIterativeData.blockContactHeaders, msIterativeData.blockFrictionHeaders, msIterativeData.blockContactPoints,
-				msIterativeData.blockFrictions, msIterativeData.artiResponse, elapsedTime, minPen, impulse0, impulse1, 
+				msIterativeData.blockFrictions, msIterativeData.artiResponse, elapsedTime, minPen, impulse0, impulse1,
 				accumulateError ? &error : NULL, curRef0, curRef1);
 		}
 		else
@@ -1077,7 +1077,7 @@ __device__ void solveBlockPartitionTGSInternal(
 			PxReal curRef1 = 1.f;
 
 			const PxU32 bodyOffset = solverDesc->islandContextPool->mBodyStartIndex;
-			
+
 			const PxU32 numDynamicBodies = solverDesc->islandContextPool->mBodyCount; //nbBodies minus offset!
 			const PxU32 numArticulations = solverDesc->islandContextPool->mArticulationCount;
 			const PxU32 numTotalBodies = bodyOffset + numDynamicBodies + numArticulations;
@@ -1235,7 +1235,7 @@ static __device__ void markActiveSlab_rigidBodyTGS(const PxgSolverCoreDesc* PX_R
 static __device__ void markActiveSlab_articulationTGS(const PxgSolverCoreDesc* __restrict solverDesc,
 	const PxgSolverSharedDesc<IterativeSolveDataTGS>* __restrict sharedDesc,
 	const PxgArticulationCoreDesc* const PX_RESTRICT artiDesc,
-	const PxU32 islandIndex, const PxU32 lastPartition, 
+	const PxU32 islandIndex, const PxU32 lastPartition,
 	PxReal minPen, PxReal elapsedTime)
 {
 	const PxgIslandContext& island = solverDesc->islandContextPool[islandIndex];
@@ -1549,7 +1549,7 @@ void solveStaticBlockTGS(
 				////if(startContactIndex == (solverDesc->numBatches))
 				////if(warpScanExclusive(iterativeData.blockConstraintBatch[startContactIndex].mask, threadIndexInWarp) == 0)
 				//{
-				//	printf("%i: NumContacts = %i, beforeVel = (%f, %f, %f), afterlinVel = (%f, %f, %f), lv1 (%f, %f, %f), av1(%f, %f, %f), startContactIndex = %i, numBatches = %i\n", 
+				//	printf("%i: NumContacts = %i, beforeVel = (%f, %f, %f), afterlinVel = (%f, %f, %f), lv1 (%f, %f, %f), av1(%f, %f, %f), startContactIndex = %i, numBatches = %i\n",
 				//		globalThreadIdx, contactCount, linVel.x, linVel.y, linVel.z, lv0.x, lv0.y, lv0.z, lv1.x, lv1.y, lv1.z, av1.x, av1.y, av1.z, startContactIndex, solverDesc->numBatches);
 				//}
 
@@ -1773,7 +1773,7 @@ void solveWholeIslandTGS(
 
 			 //Pull out shared memory into float4 format in registers to solve constraints
 			 if (threadIndexInWarp < batch.mDescStride)
-			 {			
+			 {
 				 const PxU32 readIndexA = bodyAIndex + slabId * totalBodiesIncKinematics;
 				 const PxU32 readIndexB = bodyBIndex + slabId * totalBodiesIncKinematics;
 
@@ -1795,7 +1795,7 @@ void solveWholeIslandTGS(
 
 				 PxReal curRef0 = 1.f;
 				 PxReal curRef1 = 1.f;
-				 
+
 				 const PxU32* const PX_RESTRICT encodedReferenceCount = sharedDesc->iterativeData.solverEncodedReferenceCount;
 				 const PxU32 numTotalBodies = bodyOffset + numDynamicBodies + island.mArticulationCount;
 

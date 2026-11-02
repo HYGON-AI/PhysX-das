@@ -24,7 +24,7 @@
 //
 // Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
-// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.  
+// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
 // Copyright (c) 2026 Hygon Information Technology Co., Ltd.
 
 #include "PxParticleBuffer.h"
@@ -287,7 +287,7 @@ void PxParticleAttachmentBuffer::addRigidAttachment(PxRigidActor* rigidActor, co
 				"PxParticleAttachmentBuffer::addRigidAttachment: rigidActor cannot be NULL.");
 			return;
 	}
-		
+
 	if (coneLimit)
 	{
 		attachment.mConeLimitParams.axisAngle = PxVec4(coneLimit->mAxis, coneLimit->mAngle);
@@ -309,7 +309,7 @@ void PxParticleAttachmentBuffer::addRigidAttachment(PxRigidActor* rigidActor, co
 		attachment.mID0 = rigid->getInternalIslandNodeIndex().getInd();
 	}
 	attachment.mID1 = particleID;
-			
+
 	//Insert in order...
 
 	PxU32 l = 0, r = PxU32(mAttachments.size());
@@ -499,7 +499,7 @@ struct ParticleClothBuffersImpl : public PxParticleClothBufferHelper, public PxU
 		PX_EXT_PINNED_MEMORY_FREE(*mCudaContextManager, mClothDesc.triangles);
 		PX_EXT_PINNED_MEMORY_FREE(*mCudaContextManager, mClothDesc.springs);
 #endif
-		
+
 		PX_DELETE_THIS;
 	}
 
@@ -621,7 +621,7 @@ struct ParticleVolumeBuffersImpl : public PxParticleVolumeBufferHelper, public P
 #if PX_SUPPORT_GPU_PHYSX
 		PX_EXT_PINNED_MEMORY_FREE(*mCudaContextManager, mParticleVolumes);
 #endif
-		
+
 		PX_FREE(mParticleVolumeMeshes);
 		PX_FREE(mTriangles);
 		PX_DELETE_THIS;
@@ -734,7 +734,7 @@ struct ParticleRigidBuffersImpl : public PxParticleRigidBufferHelper, public PxU
 		mRigidDesc.rigidLocalPositions = PX_EXT_PINNED_MEMORY_ALLOC(PxVec4, *mCudaContextManager, maxParticles);
 		mRigidDesc.rigidLocalNormals = PX_EXT_PINNED_MEMORY_ALLOC(PxVec4, *mCudaContextManager, maxParticles);
 #endif
-		
+
 	}
 
 	void release()
@@ -747,7 +747,7 @@ struct ParticleRigidBuffersImpl : public PxParticleRigidBufferHelper, public PxU
 		PX_EXT_PINNED_MEMORY_FREE(*mCudaContextManager, mRigidDesc.rigidLocalPositions);
 		PX_EXT_PINNED_MEMORY_FREE(*mCudaContextManager, mRigidDesc.rigidLocalNormals);
 #endif
-		
+
 		PX_DELETE_THIS;
 	}
 

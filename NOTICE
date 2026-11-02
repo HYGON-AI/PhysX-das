@@ -1,0 +1,18 @@
+PhysX-das
+Copyright (c) 2008-2025 NVIDIA Corporation.
+Copyright (c) 2026 Hygon Information Technology Co., Ltd.
+
+This product includes software developed by NVIDIA Corporation as part of
+NVIDIA Omniverse PhysX (https://github.com/NVIDIA-Omniverse/PhysX.git,
+branch main, tag ovphysx-0.4.9, commit
+34ce3ed80821f91c88fe02ace9c454280983b50a), licensed under BSD-3-Clause.
+
+Hygon Information Technology Co., Ltd. has modified the NVIDIA PhysX
+sources to add Hygon HCU (HIP) support. The changes cover new HIP runtime,
+kernel and build files, edits to GPU kernel sources, and the CPU/GPU build
+scripts. Original NVIDIA source files keep their upstream copyright and
+license notices unchanged; the Hygon contributions are distributed under
+the same BSD-3-Clause terms as the upstream project.
+
+Third-party components carried by this repository are listed in
+THIRD_PARTY_NOTICES.md.
