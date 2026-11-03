@@ -24,7 +24,7 @@
 //
 // Copyright (c) 2008-2025 NVIDIA Corporation. All rights reserved.
 // Copyright (c) 2004-2008 AGEIA Technologies, Inc. All rights reserved.
-// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.
+// Copyright (c) 2001-2004 NovodeX AG. All rights reserved.  
 
 #ifndef __CONTACT_PATCH_UTILS_CUH__
 #define __CONTACT_PATCH_UTILS_CUH__

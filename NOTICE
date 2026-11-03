@@ -14,5 +14,35 @@ scripts. Original NVIDIA source files keep their upstream copyright and
 license notices unchanged; the Hygon contributions are distributed under
 the same BSD-3-Clause terms as the upstream project.
 
+## Hygon modification register
+
+The following upstream files contain substantive Hygon compatibility or
+implementation changes. Their original NVIDIA, AGEIA, and NovodeX notices
+are retained unchanged; the Hygon contributions are registered here at the
+repository level under BSD-3-Clause, as required for modified upstream
+files:
+
+- `physx/source/gpucommon/include/PxgCommonDefines.h`: HIP-aware warp
+  definitions and compatibility includes.
+- `physx/source/gpunarrowphase/include/PxgNpKernelIndices.h`: HCU/HIP
+  kernel launch-index adjustments.
+- `physx/source/gpunarrowphase/src/CUDA/cudaSphere.cu`: HIP-compatible
+  sphere narrow-phase guarding and bounds handling.
+- `physx/source/gpunarrowphase/src/CUDA/warpHelpers.cuh`: generalized
+  warp/wavefront reduction helpers.
+- `physx/source/gpucommon/src/CUDA/shuffle.cuh`: explicit warp-width
+  shuffles for HIP.
+
+The remaining modified upstream source files contain non-substantive
+portability edits such as HIP include guards, CUDA-to-HIP type mappings,
+platform conditionals, and whitespace normalization. Those files also keep
+their original notices unchanged and do not carry a separate Hygon
+copyright line.
+
+Files created by Hygon carry a Hygon copyright notice, the SPDX identifier
+`BSD-3-Clause`, and the complete BSD-3-Clause text. Repository metadata and
+third-party notices are not source files and therefore do not carry an
+additional SPDX source header.
+
 Third-party components carried by this repository are listed in
 THIRD_PARTY_NOTICES.md.
