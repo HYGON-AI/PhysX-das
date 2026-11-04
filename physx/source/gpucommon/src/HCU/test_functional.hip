@@ -35,7 +35,9 @@
 #include "PxgCommonDefines.h"
 #include "shuffle.cuh"
 #include "RadixSort.cuh"
+#include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cmath>
 #include <cstring>
 
@@ -222,60 +224,147 @@ bool test_grid_scheduling()
 }
 
 // ====================================================================
-// Test 6: Memory bandwidth — copy test
+// Test 6: Memory bandwidth — device-to-device copy
 // ====================================================================
+extern "C" __global__ void test_fill_kernel(float* data, int n, float value)
+{
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid < n) data[tid] = value;
+}
+
 bool test_memory_bandwidth()
 {
     printf("--- Test 6: Memory Copy Bandwidth ---\n");
 
-    const size_t MB = 64;
-    const size_t bytes = MB * 1024 * 1024;
+    const double MiBPerGiB = 1024.0;
+    // Default working set is larger than any last-level cache on the device so
+    // the result reflects HBM bandwidth rather than cache-resident copies.
+    size_t bufferMiB = 256;
+    const char* bufferEnv = getenv("PX_HCU_BW_BUFFER_MIB");
+    if (bufferEnv != nullptr) {
+        const long parsed = strtol(bufferEnv, nullptr, 10);
+        if (parsed > 0) bufferMiB = (size_t)parsed;
+    }
+    // Keep the element count inside the kernel's int index range and the grid
+    // inside the maximum 1D launch size.
+    const size_t maxBufferMiB = 4096;
+    if (bufferMiB > maxBufferMiB) {
+        printf("  NOTE: PX_HCU_BW_BUFFER_MIB capped at %zu MiB\n", maxBufferMiB);
+        bufferMiB = maxBufferMiB;
+    }
+    const size_t bytes = bufferMiB * 1024 * 1024;
     const size_t N = bytes / sizeof(float);
+    const int iterations = 16;
+    const double copiedMiB = (double)iterations * (double)bytes / (1024.0 * 1024.0);
 
-    float *d_a, *d_b;
-    hipMalloc(&d_a, bytes);
-    hipMalloc(&d_b, bytes);
-
-    const int iterations = 10;
+    float* d_a = nullptr;
+    float* d_b = nullptr;
     hipStream_t stream = nullptr;
     hipEvent_t start = nullptr;
     hipEvent_t stop = nullptr;
-    hipError_t timingStatus = hipStreamCreate(&stream);
+
+    hipError_t timingStatus = hipMalloc(&d_a, bytes);
+    if(timingStatus == hipSuccess) timingStatus = hipMalloc(&d_b, bytes);
+    if(timingStatus == hipSuccess) timingStatus = hipStreamCreate(&stream);
     if(timingStatus == hipSuccess) timingStatus = hipEventCreate(&start);
     if(timingStatus == hipSuccess) timingStatus = hipEventCreate(&stop);
     if(timingStatus != hipSuccess) {
-        printf("  [FAIL] Unable to initialize D2D timing: %s\n", hipGetErrorString(timingStatus));
+        printf("  [FAIL] Unable to initialize D2D bandwidth test: %s\n", hipGetErrorString(timingStatus));
         if(start) hipEventDestroy(start);
         if(stop) hipEventDestroy(stop);
         if(stream) hipStreamDestroy(stream);
+        if(d_a) hipFree(d_a);
+        if(d_b) hipFree(d_b);
+        total++;
+        return false;
+    }
+
+    // Fill the source with a known pattern and read part of the destination
+    // back. Without this check a copy that silently does nothing would still be
+    // reported as a physically impossible bandwidth number.
+    const int fillBlock = 256;
+    const int fillGrid = (int)((N + fillBlock - 1) / fillBlock);
+    test_fill_kernel<<<fillGrid, fillBlock, 0, stream>>>(d_a, (int)N, 1.0f);
+    timingStatus = hipStreamSynchronize(stream);
+    if(timingStatus == hipSuccess) {
+        timingStatus = hipMemcpy(d_b, d_a, bytes, hipMemcpyDeviceToDevice);
+    }
+    if(timingStatus == hipSuccess) {
+        timingStatus = hipDeviceSynchronize();
+    }
+
+    const size_t checkCount = 1024 * 1024 / sizeof(float);
+    float* hostCheck = new float[checkCount];
+    bool copyCorrect = timingStatus == hipSuccess;
+    if(copyCorrect) {
+        timingStatus = hipMemcpy(hostCheck, (const float*)d_b + (N - checkCount) / 2,
+            checkCount * sizeof(float), hipMemcpyDeviceToHost);
+        copyCorrect = timingStatus == hipSuccess;
+        for(size_t i = 0; copyCorrect && i < checkCount; i++) {
+            if(hostCheck[i] != 1.0f) copyCorrect = false;
+        }
+    }
+    delete[] hostCheck;
+
+    if(!copyCorrect) {
+        printf("  [FAIL] D2D copy verification failed: %s\n", timingStatus == hipSuccess
+            ? "destination data does not match the source"
+            : hipGetErrorString(timingStatus));
+        hipEventDestroy(start);
+        hipEventDestroy(stop);
+        hipStreamDestroy(stream);
         hipFree(d_a);
         hipFree(d_b);
         total++;
         return false;
     }
 
-    // Warmup
+    // Warm up and drain the stream before timing.
     hipMemcpyAsync(d_b, d_a, bytes, hipMemcpyDeviceToDevice, stream);
     hipStreamSynchronize(stream);
+    hipDeviceSynchronize();
 
+    float msEvent = 0.0f;
     hipError_t copyStatus = hipEventRecord(start, stream);
     for(int i = 0; i < iterations && copyStatus == hipSuccess; i++) {
         copyStatus = hipMemcpyAsync(d_b, d_a, bytes, hipMemcpyDeviceToDevice, stream);
     }
     if(copyStatus == hipSuccess) copyStatus = hipEventRecord(stop, stream);
-    if(copyStatus == hipSuccess) copyStatus = hipEventSynchronize(stop);
+    if(copyStatus == hipSuccess) copyStatus = hipStreamSynchronize(stream);
+    if(copyStatus == hipSuccess) copyStatus = hipDeviceSynchronize();
+    if(copyStatus == hipSuccess && hipEventElapsedTime(&msEvent, start, stop) != hipSuccess) {
+        msEvent = 0.0f;
+    }
 
-    float ms = 0.0f;
-    if(copyStatus == hipSuccess) timingStatus = hipEventElapsedTime(&ms, start, stop);
-    const double copiedMiB = (double)(MB * iterations);
+    // Time the identical work on the host clock as well. Stream events only
+    // cover work the runtime enqueues on that stream; a copy dispatched
+    // elsewhere would be invisible to them but not to the host clock.
+    const std::chrono::steady_clock::time_point wallStart = std::chrono::steady_clock::now();
+    for(int i = 0; i < iterations && copyStatus == hipSuccess; i++) {
+        copyStatus = hipMemcpyAsync(d_b, d_a, bytes, hipMemcpyDeviceToDevice, stream);
+    }
+    if(copyStatus == hipSuccess) copyStatus = hipStreamSynchronize(stream);
+    if(copyStatus == hipSuccess) copyStatus = hipDeviceSynchronize();
+    const double msWall = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - wallStart).count();
+
+    // Report the slower of the two timings; it is the one that cannot
+    // under-report the elapsed time.
+    const double ms = msEvent > msWall ? msEvent : msWall;
     const double seconds = ms / 1000.0;
-    const double bw = timingStatus == hipSuccess && seconds > 0.0
-        ? (copiedMiB / 1024.0 * 2.0) / seconds
-        : 0.0;
+    const double bwEffective = seconds > 0.0 ? (copiedMiB / MiBPerGiB * 2.0) / seconds : 0.0;
+    const double bwOneWay = seconds > 0.0 ? (copiedMiB / MiBPerGiB) / seconds : 0.0;
 
-    printf("  D2D copy: %.1f GiB/s effective bandwidth (%.0f MiB copied in %.2f ms/copy)\n",
-        bw, copiedMiB, ms / (double)iterations);
-    const bool bandwidthOk = copyStatus == hipSuccess && timingStatus == hipSuccess && bw > 1.0;
+    printf("  D2D copy: %.1f GiB/s effective, %.1f GiB/s one-way (%.0f MiB x %d, %.3f ms/copy)\n",
+        bwEffective, bwOneWay, (double)bytes / (1024.0 * 1024.0), iterations,
+        ms / (double)iterations);
+    printf("  timing: stream events %.3f ms, host clock %.3f ms\n", msEvent, msWall);
+    if(msEvent > 0.0 && msWall > msEvent * 1.2) {
+        printf("  NOTE: stream events under-reported the D2D copy time by %.1fx; "
+               "the bandwidth above uses the host clock.\n", msWall / msEvent);
+    }
+
+    const bool bandwidthOk = copyStatus == hipSuccess && bwEffective > 1.0;
     TEST("D2D memory copy > 1 GiB/s", bandwidthOk);
 
     hipEventDestroy(start);
