@@ -179,6 +179,12 @@ if [[ ( ! -f Makefile && ! -f build.ninja ) || "$SCRIPT_DIR/CMakeLists.txt" -nt 
 fi
 
 TARGET="${1:-bench_physx_scene}"
+if [[ "$TARGET" == "all" ]]; then
+    cmake --build . -j1 --target all
+    printf 'Built all targets in %s\n' "$BUILD_DIR"
+    exit 0
+fi
+
 cmake --build . -j1 --target "$TARGET"
 
 if [[ ! -x "$TARGET" ]]; then

@@ -97,8 +97,9 @@ builds must complete before the examples are built.
 # 2) CPU (host) libraries -> build_cpu/ (Foundation, PhysXSDK, ...)
 ./build_cpu.sh
 
-# 3) One example target -> examples/hcu/build/<target>
-cd examples/hcu && ./build.sh
+# 3) Example binaries -> examples/hcu/build/<target>
+cd examples/hcu
+./build.sh
 ```
 
 `build_hcu.sh` automatically discards an incomplete or architecture-mismatched
@@ -107,8 +108,15 @@ architecture recorded by `build_hcu.sh`.
 
 ### Running the Examples
 
-`./build.sh` builds a single target and defaults to `bench_physx_scene`. Pass
-another example target name to build a different one:
+`./build.sh` defaults to `bench_physx_scene`. To build every example in
+`examples/hcu`:
+
+```bash
+cd examples/hcu
+./build.sh all
+```
+
+Pass another target name to build a specific example:
 
 ```bash
 cd examples/hcu
@@ -131,9 +139,9 @@ export PX_HCU_GPU_LIBRARY=/absolute/path/to/build_hcu/libPhysXGpuHCU.so
 ```
 
 `PX_HCU_KERNEL_DIR` is checked first. If it does not contain loadable `.hsaco`
-modules, the runtime reports a warning and then tries the remaining configured
-and default paths. If no HCU modules are loaded, it reports an error with these
-environment variable names.
+modules, the runtime reports a warning and then tries the standard kernel
+directories before `PX_HCU_GPU_LIBRARY` and the default `.so` paths. If no HCU
+modules are loaded, it reports an error with these environment variable names.
 
 ### Tests
 
@@ -158,9 +166,6 @@ cd examples/hcu
 
 `VERDICT: CPU and GPU match` indicates that the GPU result matches the CPU
 result.
-
-The table-driven `run_hcu_correctness.sh` helper is retained for internal HCU
-adaptation checks. It is not required for the public build and example workflow.
 
 ### Port Summary
 

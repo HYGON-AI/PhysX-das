@@ -136,10 +136,6 @@ static void loadGpuLibrary() {
     }
 
     const char* gpuLibrary = std::getenv("PX_HCU_GPU_LIBRARY");
-    if(gpuLibrary && gpuLibrary[0]) {
-        if(loadGpuLibraryFile(gpuLibrary)) return;
-        fprintf(stderr, "[HCU device] WARNING: PX_HCU_GPU_LIBRARY='%s' could not be loaded; using default paths\n", gpuLibrary);
-    }
 
     const char* dirs[] = {
         "./kernels", "../build_hcu/kernels", "../../build_hcu/kernels",
@@ -152,6 +148,14 @@ static void loadGpuLibrary() {
             fprintf(stderr, "[HCU device] Loaded %d hsaco modules from %s\n", n, dirs[d]);
             return;
         }
+    }
+
+    // Prefer a matching local .hsaco tree over an explicit .so. A stale
+    // PX_HCU_GPU_LIBRARY can load successfully but still crash at kernel
+    // launch when its architecture does not match the current HCU.
+    if(gpuLibrary && gpuLibrary[0]) {
+        if(loadGpuLibraryFile(gpuLibrary)) return;
+        fprintf(stderr, "[HCU device] WARNING: PX_HCU_GPU_LIBRARY='%s' could not be loaded; using default paths\n", gpuLibrary);
     }
 
     // Fallback: hipModuleLoad .so
