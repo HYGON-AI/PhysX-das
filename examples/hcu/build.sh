@@ -44,6 +44,36 @@ read_cache_value()
     fi
 }
 
+normalize_hcu_arch()
+{
+    local raw="${1//$'\r'/}"
+    local arch
+    local first_arch=""
+    local values=()
+
+    IFS=';' read -r -a values <<< "$raw"
+    for value in "${values[@]}"; do
+        arch="${value//[[:space:]]/}"
+        [[ -n "$arch" ]] || continue
+        if [[ ! "$arch" =~ ^gfx[0-9][0-9A-Za-z]*$ ]]; then
+            printf '%s\n' "$raw"
+            return 0
+        fi
+        if [[ -z "$first_arch" ]]; then
+            first_arch="$arch"
+        elif [[ "$arch" != "$first_arch" ]]; then
+            printf 'ERROR: multiple HCU architectures in CMAKE_HIP_ARCHITECTURES: %s\n' "$raw" >&2
+            return 2
+        fi
+    done
+
+    if [[ -n "$first_arch" ]]; then
+        printf '%s\n' "$first_arch"
+    else
+        printf '%s\n' "$raw"
+    fi
+}
+
 detect_hcu_arch()
 {
     if command -v rocminfo >/dev/null 2>&1; then
@@ -64,6 +94,7 @@ fi
 if [[ -z "$HCU_ARCH" ]]; then
     HCU_ARCH="$(detect_hcu_arch || true)"
 fi
+HCU_ARCH="$(normalize_hcu_arch "$HCU_ARCH")"
 if [[ -z "$HCU_ARCH" ]]; then
     printf 'ERROR: cannot determine HCU architecture. Run build_hcu.sh first or set HCU_ARCH=gfxXXX.\n' >&2
     exit 2
