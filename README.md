@@ -115,13 +115,25 @@ cd examples/hcu
 ./build.sh bench_compare
 ```
 
-Binaries are written to `examples/hcu/build/`. Run them from there so the
-runtime can locate the GPU library and kernel files:
+Binaries are written to `examples/hcu/build/`. The runtime searches the
+standard relative locations by default, so run from `examples/hcu/`:
 
 ```bash
 cd examples/hcu
 ./build/bench_physx_scene
 ```
+
+To run from another directory, set the HCU module paths explicitly:
+
+```bash
+export PX_HCU_KERNEL_DIR=/absolute/path/to/build_hcu/kernels
+export PX_HCU_GPU_LIBRARY=/absolute/path/to/build_hcu/libPhysXGpuHCU.so
+```
+
+`PX_HCU_KERNEL_DIR` is checked first. If it does not contain loadable `.hsaco`
+modules, the runtime reports a warning and then tries the remaining configured
+and default paths. If no HCU modules are loaded, it reports an error with these
+environment variable names.
 
 ### Tests
 

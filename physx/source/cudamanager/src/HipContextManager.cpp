@@ -48,43 +48,105 @@ static bool gLoaded = false;
 
 #include <dirent.h>
 
+static int loadModulesFromDirectory(const char* dir) {
+    DIR* dp = opendir(dir);
+    if(!dp) return 0;
+
+    int n = 0;
+    struct dirent* e;
+    while((e = readdir(dp))) {
+        const char* nm = e->d_name;
+        int len = strlen(nm);
+        if(len < 6 || strcmp(nm+len-6, ".hsaco")) continue;
+
+        char path[512];
+        int pathLen = snprintf(path, sizeof(path), "%s/%s", dir, nm);
+        if(pathLen <= 0 || pathLen >= (int)sizeof(path)) continue;
+
+        FILE* fp = fopen(path, "rb");
+        if(!fp) continue;
+        if(fseek(fp, 0, SEEK_END) != 0) {
+            fclose(fp);
+            continue;
+        }
+        long fileSize = ftell(fp);
+        if(fileSize <= 0 || fseek(fp, 0, SEEK_SET) != 0) {
+            fclose(fp);
+            continue;
+        }
+
+        size_t sz = (size_t)fileSize;
+        void* buf = malloc(sz);
+        if(!buf) {
+            fclose(fp);
+            continue;
+        }
+        if(fread(buf, 1, sz, fp) != sz) {
+            free(buf);
+            fclose(fp);
+            continue;
+        }
+        fclose(fp);
+
+        hipModule_t mod = nullptr;
+        hipError_t r = hipModuleLoadData(&mod, buf);
+        free(buf);
+        if(r == hipSuccess && mod) {
+            gModules.pushBack(mod);
+            if(n == 0) fprintf(stderr, "[HCU device] First hsaco: %s\n", path);
+            n++;
+        }
+    }
+    closedir(dp);
+    return n;
+}
+
+static bool loadGpuLibraryFile(const char* path) {
+    FILE* fp = fopen(path, "rb");
+    if(!fp) return false;
+    fclose(fp);
+
+    hipModule_t mod = nullptr;
+    hipError_t r = hipModuleLoad(&mod, path);
+    if(r == hipSuccess && mod) {
+        gModules.pushBack(mod);
+        g_HCU_ModuleCount = 1;
+        fprintf(stderr, "[HCU device] Loaded .so: %s\n", path);
+        return true;
+    }
+
+    fprintf(stderr, "[HCU device] Failed to load .so '%s': %s\n",
+        path, hipGetErrorString(r));
+    return false;
+}
+
 static void loadGpuLibrary() {
     if(gLoaded) return;
     gLoaded = true;
+
+    const char* kernelDir = std::getenv("PX_HCU_KERNEL_DIR");
+    if(kernelDir && kernelDir[0]) {
+        int n = loadModulesFromDirectory(kernelDir);
+        if(n > 0) {
+            g_HCU_ModuleCount = n;
+            fprintf(stderr, "[HCU device] Loaded %d hsaco modules from %s\n", n, kernelDir);
+            return;
+        }
+        fprintf(stderr, "[HCU device] WARNING: PX_HCU_KERNEL_DIR='%s' contains no loadable .hsaco modules; using default paths\n", kernelDir);
+    }
+
+    const char* gpuLibrary = std::getenv("PX_HCU_GPU_LIBRARY");
+    if(gpuLibrary && gpuLibrary[0]) {
+        if(loadGpuLibraryFile(gpuLibrary)) return;
+        fprintf(stderr, "[HCU device] WARNING: PX_HCU_GPU_LIBRARY='%s' could not be loaded; using default paths\n", gpuLibrary);
+    }
 
     const char* dirs[] = {
         "./kernels", "../build_hcu/kernels", "../../build_hcu/kernels",
         "../../../build_hcu/kernels", nullptr};
 
     for(int d = 0; dirs[d]; d++) {
-        DIR* dp = opendir(dirs[d]);
-        if(!dp) continue;
-        int n = 0;
-        struct dirent* e;
-        while((e = readdir(dp))) {
-            const char* nm = e->d_name;
-            int len = strlen(nm);
-            if(len < 6 || strcmp(nm+len-6, ".hsaco")) continue;
-
-            char path[512];
-            snprintf(path, sizeof(path), "%s/%s", dirs[d], nm);
-            FILE* fp = fopen(path, "rb");
-            if(!fp) continue;
-            fseek(fp, 0, SEEK_END);
-            size_t sz = ftell(fp); fseek(fp, 0, SEEK_SET);
-            void* buf = malloc(sz);
-            fread(buf, 1, sz, fp); fclose(fp);
-
-            hipModule_t mod = nullptr;
-            hipError_t r = hipModuleLoadData(&mod, buf);
-            free(buf);
-            if(r == hipSuccess && mod) {
-                gModules.pushBack(mod);
-                if(n == 0) fprintf(stderr, "[HCU device] First hsaco: %s\n", path);
-                n++;
-            }
-        }
-        closedir(dp);
+        int n = loadModulesFromDirectory(dirs[d]);
         if(n > 0) {
             g_HCU_ModuleCount = n;
             fprintf(stderr, "[HCU device] Loaded %d hsaco modules from %s\n", n, dirs[d]);
@@ -99,17 +161,12 @@ static void loadGpuLibrary() {
         "../../build_hcu/libPhysXGpuHCU.so",
         "../../../build_hcu/libPhysXGpuHCU.so", nullptr};
     for(int i=0; paths[i]; i++) {
-        FILE* fp = fopen(paths[i], "r");
-        if(!fp) continue; fclose(fp);
-        hipModule_t mod = nullptr;
-        if(hipModuleLoad(&mod, paths[i]) == hipSuccess && mod) {
-            gModules.pushBack(mod);
-            g_HCU_ModuleCount = 1;
-            fprintf(stderr, "[HCU device] Loaded .so: %s\n", paths[i]);
-            return;
-        }
+        if(loadGpuLibraryFile(paths[i])) return;
     }
-    fprintf(stderr, "[HCU device] No module found\n");
+
+    fprintf(stderr, "[HCU device] ERROR: no HCU GPU modules were loaded. "
+        "Set PX_HCU_KERNEL_DIR to the directory containing *.hsaco files, "
+        "or PX_HCU_GPU_LIBRARY to libPhysXGpuHCU.so\n");
 }
 
 class HipCtx : public PxCudaContext {
