@@ -236,32 +236,54 @@ bool test_memory_bandwidth()
     hipMalloc(&d_a, bytes);
     hipMalloc(&d_b, bytes);
 
-    hipEvent_t start, stop;
-    hipEventCreate(&start);
-    hipEventCreate(&stop);
+    const int iterations = 10;
+    hipStream_t stream = nullptr;
+    hipEvent_t start = nullptr;
+    hipEvent_t stop = nullptr;
+    hipError_t timingStatus = hipStreamCreate(&stream);
+    if(timingStatus == hipSuccess) timingStatus = hipEventCreate(&start);
+    if(timingStatus == hipSuccess) timingStatus = hipEventCreate(&stop);
+    if(timingStatus != hipSuccess) {
+        printf("  [FAIL] Unable to initialize D2D timing: %s\n", hipGetErrorString(timingStatus));
+        if(start) hipEventDestroy(start);
+        if(stop) hipEventDestroy(stop);
+        if(stream) hipStreamDestroy(stream);
+        hipFree(d_a);
+        hipFree(d_b);
+        total++;
+        return false;
+    }
 
     // Warmup
-    hipMemcpy(d_b, d_a, bytes, hipMemcpyDeviceToDevice);
+    hipMemcpyAsync(d_b, d_a, bytes, hipMemcpyDeviceToDevice, stream);
+    hipStreamSynchronize(stream);
 
-    hipEventRecord(start);
-    for (int i = 0; i < 10; i++) {
-        hipMemcpy(d_b, d_a, bytes, hipMemcpyDeviceToDevice);
+    hipError_t copyStatus = hipEventRecord(start, stream);
+    for(int i = 0; i < iterations && copyStatus == hipSuccess; i++) {
+        copyStatus = hipMemcpyAsync(d_b, d_a, bytes, hipMemcpyDeviceToDevice, stream);
     }
-    hipEventRecord(stop);
-    hipEventSynchronize(stop);
+    if(copyStatus == hipSuccess) copyStatus = hipEventRecord(stop, stream);
+    if(copyStatus == hipSuccess) copyStatus = hipEventSynchronize(stop);
 
-    float ms = 0;
-    hipEventElapsedTime(&ms, start, stop);
-    float bw = (MB * 10.0f * 2.0f) / (ms / 1000.0f);  // *2 for read+write
+    float ms = 0.0f;
+    if(copyStatus == hipSuccess) timingStatus = hipEventElapsedTime(&ms, start, stop);
+    const double copiedMiB = (double)(MB * iterations);
+    const double seconds = ms / 1000.0;
+    const double bw = timingStatus == hipSuccess && seconds > 0.0
+        ? (copiedMiB / 1024.0 * 2.0) / seconds
+        : 0.0;
 
-    printf("  D2D copy: %.1f GB/s (%.0f MB in %.2f ms)\n", bw, (float)(MB * 10), ms / 10.0f);
-    TEST("D2D memory copy > 1 GB/s", bw > 1.0f);
+    printf("  D2D copy: %.1f GiB/s effective bandwidth (%.0f MiB copied in %.2f ms/copy)\n",
+        bw, copiedMiB, ms / (double)iterations);
+    const bool bandwidthOk = copyStatus == hipSuccess && timingStatus == hipSuccess && bw > 1.0;
+    TEST("D2D memory copy > 1 GiB/s", bandwidthOk);
 
     hipEventDestroy(start);
     hipEventDestroy(stop);
+    hipStreamDestroy(stream);
     hipFree(d_a);
     hipFree(d_b);
-    return true;
+    return bandwidthOk;
 }
 
 // ====================================================================
