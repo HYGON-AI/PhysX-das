@@ -99,8 +99,12 @@ builds must complete before the examples are built.
 
 # 3) Example binaries -> examples/hcu/build/<target>
 cd examples/hcu
-./build.sh
+./build.sh all                  # every example
+./build.sh bench_compare        # one example, named after its source file
 ```
+
+`./build.sh` without a target name builds only the default target,
+`bench_physx_scene`.
 
 `build_hcu.sh` automatically discards an incomplete or architecture-mismatched
 build directory before reconfiguring. `examples/hcu/build.sh` reuses the
@@ -128,7 +132,8 @@ cd examples/hcu
 ./build.sh all
 ```
 
-Pass another target name to build a specific example:
+Pass a target name to build a single example. The name is the example source
+file without its extension:
 
 ```bash
 cd examples/hcu
