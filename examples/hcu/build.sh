@@ -36,6 +36,43 @@ BUILD_DIR="$SCRIPT_DIR/build"
 PHYSX_ROOT="$SCRIPT_DIR/../../physx"
 PHYSX_BUILD_DIR="${PHYSX_BUILD_DIR:-$SCRIPT_DIR/../../build_cpu}"
 
+read_cache_value()
+{
+    local cache_file="$1" key="$2"
+    if [[ -f "$cache_file" ]]; then
+        sed -n "s/^${key}:[^=]*=//p" "$cache_file" | tail -1
+    fi
+}
+
+detect_hcu_arch()
+{
+    if command -v rocminfo >/dev/null 2>&1; then
+        rocminfo 2>/dev/null |
+            sed -n 's/.*\(gfx[0-9][0-9A-Za-z]*\).*/\1/p' |
+            head -n 1
+    fi
+}
+
+BUILD_HCU_CACHE="$SCRIPT_DIR/../../build_hcu/CMakeCache.txt"
+HCU_ARCH="${HCU_ARCH:-}"
+if [[ -z "$HCU_ARCH" ]]; then
+    HCU_ARCH="$(read_cache_value "$BUILD_HCU_CACHE" CMAKE_HIP_ARCHITECTURES)"
+fi
+if [[ -z "$HCU_ARCH" ]]; then
+    HCU_ARCH="$(read_cache_value "$BUILD_HCU_CACHE" HCU_ARCH)"
+fi
+if [[ -z "$HCU_ARCH" ]]; then
+    HCU_ARCH="$(detect_hcu_arch || true)"
+fi
+if [[ -z "$HCU_ARCH" ]]; then
+    printf 'ERROR: cannot determine HCU architecture. Run build_hcu.sh first or set HCU_ARCH=gfxXXX.\n' >&2
+    exit 2
+fi
+if [[ ! "$HCU_ARCH" =~ ^gfx[0-9][0-9A-Za-z]*$ ]]; then
+    printf 'ERROR: invalid HCU architecture: %s\n' "$HCU_ARCH" >&2
+    exit 2
+fi
+
 reset_build_dir()
 {
     if [[ -z "$BUILD_DIR" || "$BUILD_DIR" != "$SCRIPT_DIR/build" ]]; then
@@ -70,24 +107,29 @@ fi
 
 echo "HIP Clang: $HIP_CLANG"
 echo "Building PhysX HCU Examples..."
+echo "HCU Architecture: $HCU_ARCH"
 printf 'build_script_marker=%s\n' "$BUILD_SCRIPT_MARKER"
 
 # CMake caches absolute paths. A cache copied from Windows/WSL or another checkout cannot be
 # reused on the remote node, so discard only this exact example build directory on mismatch.
 CACHE_FILE="$BUILD_DIR/CMakeCache.txt"
-if [[ -f "$CACHE_FILE" ]]; then
+if [[ -f "$CACHE_FILE" && ( -f "$BUILD_DIR/Makefile" || -f "$BUILD_DIR/build.ninja" ) ]]; then
     cache_source="$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$CACHE_FILE" | tail -1)"
     cache_build="$(sed -n 's/^CMAKE_CACHEFILE_DIR:INTERNAL=//p' "$CACHE_FILE" | tail -1)"
     cache_hip="$(sed -n 's/^CMAKE_HIP_COMPILER:[^=]*=//p' "$CACHE_FILE" | tail -1)"
+    cache_arch="$(sed -n 's/^CMAKE_HIP_ARCHITECTURES:[^=]*=//p' "$CACHE_FILE" | tail -1)"
+    if [[ -z "$cache_arch" ]]; then
+        cache_arch="$(sed -n 's/^HCU_ARCH:[^=]*=//p' "$CACHE_FILE" | tail -1)"
+    fi
     if [[ "$cache_source" != "$SCRIPT_DIR" || "$cache_build" != "$BUILD_DIR" || \
-          "$cache_hip" != "$HIP_CLANG" || ! -x "$cache_hip" ]]; then
-        printf 'Discarding stale/foreign CMake cache: source=%s build=%s hip=%s expected_hip=%s\n' \
+          "$cache_hip" != "$HIP_CLANG" || "$cache_arch" != "$HCU_ARCH" || ! -x "$cache_hip" ]]; then
+        printf 'Discarding stale/foreign CMake cache: source=%s build=%s hip=%s arch=%s expected_hip=%s expected_arch=%s\n' \
             "${cache_source:-missing}" "${cache_build:-missing}" \
-            "${cache_hip:-missing}" "$HIP_CLANG"
+            "${cache_hip:-missing}" "${cache_arch:-missing}" "$HIP_CLANG" "$HCU_ARCH"
         reset_build_dir
     fi
 elif [[ -e "$BUILD_DIR" ]]; then
-    printf 'Discarding incomplete example build directory without CMakeCache.txt: %s\n' "$BUILD_DIR"
+    printf 'Discarding incomplete example build directory: %s\n' "$BUILD_DIR"
     reset_build_dir
 else
     mkdir -p "$BUILD_DIR"
@@ -96,10 +138,11 @@ fi
 cd "$BUILD_DIR"
 
 # Run cmake if needed, or when example build rules changed.
-if [[ ! -f Makefile || "$SCRIPT_DIR/CMakeLists.txt" -nt CMakeCache.txt ]]; then
+if [[ ( ! -f Makefile && ! -f build.ninja ) || "$SCRIPT_DIR/CMakeLists.txt" -nt CMakeCache.txt ]]; then
     cmake "$SCRIPT_DIR" \
         -DCMAKE_CXX_COMPILER="$(command -v g++)" \
         -DCMAKE_HIP_COMPILER="$HIP_CLANG" \
+        -DCMAKE_HIP_ARCHITECTURES="$HCU_ARCH" \
         -DPHYSX_ROOT_DIR="$PHYSX_ROOT" \
         -DPHYSX_BUILD_DIR="$PHYSX_BUILD_DIR"
 fi

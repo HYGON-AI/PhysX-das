@@ -31,10 +31,59 @@ set -euo pipefail
 
 BUILD_SCRIPT_MARKER="PX_HCU_BUILD_SCRIPT_R3_FOREIGN_CACHE_RECOVERY"
 
-HCU_ARCH="${1:-gfx936}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build_hcu"
 CMAKE_DIR="$SCRIPT_DIR/physx/source/compiler/cmakehip"
+
+append_cmake_prefix() {
+    local path="$1"
+    [[ -d "$path" ]] || return 0
+    case ":${CMAKE_PREFIX_PATH:-}:" in
+        *":$path:"*) ;;
+        *) CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$path" ;;
+    esac
+}
+
+CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH:-}"
+append_cmake_prefix /opt/dtk/lib64/cmake
+append_cmake_prefix /opt/dtk
+export CMAKE_PREFIX_PATH
+
+detect_hcu_arch() {
+    if command -v rocminfo >/dev/null 2>&1; then
+        rocminfo 2>/dev/null |
+            sed -n 's/.*\(gfx[0-9][0-9A-Za-z]*\).*/\1/p' |
+            head -n 1
+    fi
+}
+
+DETECTED_HCU_ARCH="$(detect_hcu_arch || true)"
+if (( $# > 1 )); then
+    echo "Usage: $0 [gfxXXX]" >&2
+    exit 2
+fi
+
+REQUESTED_HCU_ARCH="${1:-}"
+if [[ -n "$REQUESTED_HCU_ARCH" ]]; then
+    HCU_ARCH="$REQUESTED_HCU_ARCH"
+else
+    HCU_ARCH="$DETECTED_HCU_ARCH"
+fi
+
+if [[ -z "$HCU_ARCH" ]]; then
+    echo "ERROR: could not detect the HCU architecture." >&2
+    echo "Run 'rocminfo | grep -m1 gfx' and pass the reported gfxXXX value." >&2
+    exit 2
+fi
+if [[ ! "$HCU_ARCH" =~ ^gfx[0-9][0-9A-Za-z]*$ ]]; then
+    echo "ERROR: invalid HCU architecture: $HCU_ARCH" >&2
+    exit 2
+fi
+if [[ -n "$REQUESTED_HCU_ARCH" && -n "$DETECTED_HCU_ARCH" &&
+      "$REQUESTED_HCU_ARCH" != "$DETECTED_HCU_ARCH" ]]; then
+    echo "ERROR: requested HCU architecture $REQUESTED_HCU_ARCH does not match detected hardware $DETECTED_HCU_ARCH." >&2
+    exit 2
+fi
 
 echo "========================================"
 echo " PhysX HCU Build"
@@ -89,20 +138,24 @@ configure_build() {
         "${extra_args[@]}"
 }
 
-# Configure only when needed, and recover a cache created under another
-# source/build path before cmake --build can trigger a failed auto-regenerate.
+# Configure only when needed, and recover incomplete, mismatched, or foreign
+# caches before cmake --build can trigger a failed auto-regenerate.
 CACHE_FILE="$BUILD_DIR/CMakeCache.txt"
-if [[ -f "$CACHE_FILE" ]]; then
+if [[ -f "$CACHE_FILE" && ( -f "$BUILD_DIR/Makefile" || -f "$BUILD_DIR/build.ninja" ) ]]; then
     cache_source="$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$CACHE_FILE" | tail -1)"
     cache_build="$(sed -n 's/^CMAKE_CACHEFILE_DIR:INTERNAL=//p' "$CACHE_FILE" | tail -1)"
     cache_physx="$(sed -n 's/^PHYSX_ROOT_DIR:[^=]*=//p' "$CACHE_FILE" | tail -1)"
     cache_hip="$(sed -n 's/^CMAKE_HIP_COMPILER:[^=]*=//p' "$CACHE_FILE" | tail -1)"
+    cache_arch="$(sed -n 's/^HCU_ARCH:[^=]*=//p' "$CACHE_FILE" | tail -1)"
+    if [[ -z "$cache_arch" ]]; then
+        cache_arch="$(sed -n 's/^CMAKE_HIP_ARCHITECTURES:[^=]*=//p' "$CACHE_FILE" | tail -1)"
+    fi
     if [[ "$cache_source" != "$CMAKE_DIR" || "$cache_build" != "$BUILD_DIR" || \
           "$cache_physx" != "$SCRIPT_DIR/physx" || "$cache_hip" != "$HIP_CLANG" || \
-          ! -x "$cache_hip" ]]; then
-        printf 'Discarding stale/foreign CMake cache: source=%s build=%s physx=%s hip=%s expected_hip=%s\n' \
+          "$cache_arch" != "$HCU_ARCH" || ! -x "$cache_hip" ]]; then
+        printf 'Discarding stale/foreign CMake cache: source=%s build=%s physx=%s hip=%s arch=%s expected_hip=%s expected_arch=%s\n' \
             "${cache_source:-missing}" "${cache_build:-missing}" "${cache_physx:-missing}" \
-            "${cache_hip:-missing}" "$HIP_CLANG"
+            "${cache_hip:-missing}" "${cache_arch:-missing}" "$HIP_CLANG" "$HCU_ARCH"
         reset_build_dir
         configure_build
     else
@@ -110,6 +163,9 @@ if [[ -f "$CACHE_FILE" ]]; then
         echo "Incremental build (existing config)..."
     fi
 else
+    if [[ -e "$BUILD_DIR" ]]; then
+        echo "Discarding incomplete or incompatible HCU build directory: $BUILD_DIR"
+    fi
     reset_build_dir
     configure_build
 fi

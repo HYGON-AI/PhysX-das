@@ -27,8 +27,46 @@
 
 cmake_minimum_required(VERSION 3.21)
 
-if(NOT DEFINED CMAKE_HIP_ARCHITECTURES)
-    set(CMAKE_HIP_ARCHITECTURES gfx936 CACHE STRING "HCU/HIP GPU architecture")
+if(NOT DEFINED CMAKE_HIP_ARCHITECTURES OR "${CMAKE_HIP_ARCHITECTURES}" STREQUAL "")
+    set(_physx_hcu_arch "")
+    if(DEFINED ENV{HCU_ARCH} AND NOT "$ENV{HCU_ARCH}" STREQUAL "")
+        set(_physx_hcu_arch "$ENV{HCU_ARCH}")
+    endif()
+
+    set(_physx_hcu_cache "${CMAKE_CURRENT_SOURCE_DIR}/../../build_hcu/CMakeCache.txt")
+    if(_physx_hcu_arch STREQUAL "" AND EXISTS "${_physx_hcu_cache}")
+        file(STRINGS "${_physx_hcu_cache}" _physx_hcu_cache_lines
+            REGEX "^CMAKE_HIP_ARCHITECTURES:[^=]*=")
+        if(_physx_hcu_cache_lines)
+            list(GET _physx_hcu_cache_lines 0 _physx_hcu_cache_line)
+            string(REGEX REPLACE "^[^=]*=" "" _physx_hcu_arch "${_physx_hcu_cache_line}")
+        endif()
+    endif()
+    if(_physx_hcu_arch STREQUAL "" AND EXISTS "${_physx_hcu_cache}")
+        file(STRINGS "${_physx_hcu_cache}" _physx_hcu_cache_hcu_arch_lines
+            REGEX "^HCU_ARCH:[^=]*=")
+        if(_physx_hcu_cache_hcu_arch_lines)
+            list(GET _physx_hcu_cache_hcu_arch_lines 0 _physx_hcu_cache_line)
+            string(REGEX REPLACE "^[^=]*=" "" _physx_hcu_arch "${_physx_hcu_cache_line}")
+        endif()
+    endif()
+
+    if(_physx_hcu_arch STREQUAL "")
+        find_program(PHYSX_ROCMINFO_EXECUTABLE rocminfo)
+        if(PHYSX_ROCMINFO_EXECUTABLE)
+            execute_process(
+                COMMAND "${PHYSX_ROCMINFO_EXECUTABLE}"
+                OUTPUT_VARIABLE _physx_rocminfo_output
+                ERROR_QUIET)
+            string(REGEX MATCH "gfx[0-9][0-9A-Za-z]*" _physx_hcu_arch "${_physx_rocminfo_output}")
+        endif()
+    endif()
+
+    if(_physx_hcu_arch STREQUAL "")
+        message(FATAL_ERROR
+            "HCU architecture not detected. Pass -DCMAKE_HIP_ARCHITECTURES=gfxXXX.")
+    endif()
+    set(CMAKE_HIP_ARCHITECTURES "${_physx_hcu_arch}" CACHE STRING "HCU/HIP GPU architecture")
 endif()
 
 project(PhysXHcuExamples LANGUAGES CXX HIP)
@@ -155,11 +193,6 @@ foreach(SOURCE_FILE ${EXAMPLE_CPP_SOURCES})
             ${PHYSX_ROOT_DIR}/source/physxextensions/src/ExtTetrahedronMeshExt.cpp
         )
         add_hcu_example(${SOURCE_FILE} ${DEFORMABLE_VOLUME_EXT_SOURCES})
-    elseif(EXE_NAME STREQUAL "bench_pbd_cloth_smoke")
-        # The existing static PhysXExtensions archive may not include GPU
-        # particle-cloth helpers, so compile the small implementation here.
-        set(PBD_CLOTH_EXT_SOURCE ${PHYSX_ROOT_DIR}/source/physxextensions/src/ExtParticleExt.cpp)
-        add_hcu_example(${SOURCE_FILE} ${PBD_CLOTH_EXT_SOURCE})
     else()
         add_hcu_example(${SOURCE_FILE})
     endif()

@@ -26,7 +26,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-# Table-driven, fingerprinted correctness runner for gfx936 HCU benchmarks.
+# Table-driven, fingerprinted correctness runner for HCU benchmarks.
 
 set -u
 
@@ -116,10 +116,10 @@ Usage: ./run_hcu_correctness.sh [--list|all|BATCH|CASE]
 Examples:
   ./run_hcu_correctness.sh --list
   ./run_hcu_correctness.sh --pin all
-  ./run_hcu_correctness.sh --pin trimesh_complex
+  ./run_hcu_correctness.sh --pin tgs_solver
   ./run_hcu_correctness.sh all
   ./run_hcu_correctness.sh batch2
-  ./run_hcu_correctness.sh trimesh_complex
+  ./run_hcu_correctness.sh tgs_solver
 
 Environment overrides:
   REPEAT=N                    repeat each selected case N times

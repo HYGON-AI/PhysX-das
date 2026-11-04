@@ -61,6 +61,29 @@ PhysX GPU modules have been ported to **Hygon HCU** (gfx936/gfx938) with HIP.
 | CMake | >= 3.21 |
 | g++ | >= 8.0 |
 
+### Build Environment
+
+Run this command from the repository root before the first build:
+
+```bash
+chmod +x examples/hcu/*.sh
+```
+
+`build_hcu.sh` automatically adds `/opt/dtk/lib64/cmake` and `/opt/dtk` to
+`CMAKE_PREFIX_PATH` when those DTK 2604 directories are present. For a custom
+DTK installation, set `CMAKE_PREFIX_PATH` explicitly.
+
+The build scripts detect the HCU architecture with `rocminfo`. You can check it
+directly:
+
+```bash
+rocminfo | grep -m1 gfx
+```
+
+BW1101 systems report `gfx938`. If `rocminfo` is unavailable, pass the
+architecture explicitly. An explicit value that differs from the detected
+hardware is rejected because it can produce incomplete or incorrect results.
+
 ### Quick Start
 
 The HCU port is built in three stages, in this order. The examples link
@@ -69,7 +92,7 @@ builds must complete before the examples are built.
 
 ```bash
 # 1) GPU (HIP) libraries -> build_hcu/libPhysXGpuHCU.so, build_hcu/kernels/*.hsaco
-./build_hcu.sh gfx936
+./build_hcu.sh
 
 # 2) CPU (host) libraries -> build_cpu/ (Foundation, PhysXSDK, ...)
 ./build_cpu.sh
@@ -77,6 +100,10 @@ builds must complete before the examples are built.
 # 3) One example target -> examples/hcu/build/<target>
 cd examples/hcu && ./build.sh
 ```
+
+`build_hcu.sh` automatically discards an incomplete or architecture-mismatched
+build directory before reconfiguring. `examples/hcu/build.sh` reuses the
+architecture recorded by `build_hcu.sh`.
 
 ### Running the Examples
 
@@ -96,17 +123,32 @@ cd examples/hcu
 ./build/bench_physx_scene
 ```
 
-### Correctness and Smoke Runners
+### Tests
 
-| Runner | Purpose |
-|--------|---------|
-| `examples/hcu/run_hcu_correctness.sh` | table-driven, fingerprinted correctness cases (`--list` prints case names) |
-| `examples/hcu/run_gpu_broadphase_smoke.sh` | fail-fast GPU broadphase smoke test with a fingerprint baseline |
-| `build_cpu/test_cpu` | unit probe produced by `build_cpu.sh` |
-| `build_hcu/test_functional` | functional probe produced by `build_hcu.sh` |
+The basic probes are:
 
-Runners read overrides from the environment, for example
-`EXPECTED_HCU_COUNT=8 REPEAT=3 ./run_hcu_correctness.sh all`.
+```bash
+./build_cpu/test_cpu
+./build_hcu/test_functional
+```
+
+Both probes should report `Results: 7 / 7 passed`. If `test_functional` reports
+a partial pass on BW1101, verify that the HCU library was built for `gfx938`
+rather than `gfx936`.
+
+For a CPU/GPU comparison of the same scene:
+
+```bash
+cd examples/hcu
+./build.sh bench_compare
+./build/bench_compare
+```
+
+`VERDICT: CPU and GPU match` indicates that the GPU result matches the CPU
+result.
+
+The table-driven `run_hcu_correctness.sh` helper is retained for internal HCU
+adaptation checks. It is not required for the public build and example workflow.
 
 ### Port Summary
 

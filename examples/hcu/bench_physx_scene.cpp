@@ -278,7 +278,7 @@ int main(int argc, char** argv)
         if (setenv("PX_HCU_RIGID_STAGE2_INDEX_P54", value, 1) != 0) return 2;
         printf("p54_benchmark_marker=PX_HCU_RIGID_STAGE2_INDEX_P54_BENCH_V1 mode=%d scope=ordinary_rigid\n", opt.stage2IndexP54);
 #else
-        std::fprintf(stderr, "P54 requires the gfx936 HCU product\n");
+        std::fprintf(stderr, "P54 benchmark control requires a POSIX environment\n");
         return 2;
 #endif
     }
