@@ -106,6 +106,18 @@ cd examples/hcu
 build directory before reconfiguring. `examples/hcu/build.sh` reuses the
 architecture recorded by `build_hcu.sh`.
 
+### Build Configuration
+
+`build_hcu.sh` and `examples/hcu/build.sh` default to
+`CMAKE_BUILD_TYPE=Release` and pass it to CMake explicitly. The HCU CMake
+project adds `-O3` to the HIP compilation flags for Release builds. Use
+`CMAKE_BUILD_TYPE=Debug` only when debugging; it is not representative for
+performance measurements.
+
+The scripts detect and replace build trees configured with a different build
+type, HCU architecture, compiler, or source path. `build_hcu.sh` also removes
+stale `.hsaco` files before extracting code objects from the current build.
+
 ### Running the Examples
 
 `./build.sh` defaults to `bench_physx_scene`. To build every example in
@@ -140,8 +152,22 @@ export PX_HCU_GPU_LIBRARY=/absolute/path/to/build_hcu/libPhysXGpuHCU.so
 
 `PX_HCU_KERNEL_DIR` is checked first. If it does not contain loadable `.hsaco`
 modules, the runtime reports a warning and then tries the standard kernel
-directories before `PX_HCU_GPU_LIBRARY` and the default `.so` paths. If no HCU
-modules are loaded, it reports an error with these environment variable names.
+directories before `PX_HCU_GPU_LIBRARY` and the default `.so` paths. Use a
+`.so` or `.hsaco` build produced for the same HCU architecture as the local
+device. If no HCU modules are loaded, the runtime reports an error with these
+environment variable names.
+
+For performance runs, start from a Release build and make sure the diagnostic
+runtime switches are not enabled:
+
+```bash
+unset PX_HCU_SYNC_KERNELS PX_HCU_TRACE_KERNELS
+./build/bench_physx_scene
+```
+
+`PX_HCU_SYNC_KERNELS` synchronizes after every kernel launch, and
+`PX_HCU_TRACE_KERNELS` logs every launch; either switch can dominate runtime
+and produce misleading FPS results.
 
 ### Tests
 

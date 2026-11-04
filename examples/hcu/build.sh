@@ -35,6 +35,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 BUILD_DIR="$SCRIPT_DIR/build"
 PHYSX_ROOT="$SCRIPT_DIR/../../physx"
 PHYSX_BUILD_DIR="${PHYSX_BUILD_DIR:-$SCRIPT_DIR/../../build_cpu}"
+CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
+
+case "$CMAKE_BUILD_TYPE" in
+    Debug|Release|RelWithDebInfo|MinSizeRel) ;;
+    *)
+        echo "ERROR: unsupported CMAKE_BUILD_TYPE: $CMAKE_BUILD_TYPE" >&2
+        echo "Use Debug, Release, RelWithDebInfo, or MinSizeRel." >&2
+        exit 2
+        ;;
+esac
 
 read_cache_value()
 {
@@ -137,6 +147,7 @@ if [[ -z "$HIP_CLANG" ]]; then
 fi
 
 echo "HIP Clang: $HIP_CLANG"
+echo "Build type: $CMAKE_BUILD_TYPE"
 echo "Building PhysX HCU Examples..."
 echo "HCU Architecture: $HCU_ARCH"
 printf 'build_script_marker=%s\n' "$BUILD_SCRIPT_MARKER"
@@ -148,15 +159,24 @@ if [[ -f "$CACHE_FILE" && ( -f "$BUILD_DIR/Makefile" || -f "$BUILD_DIR/build.nin
     cache_source="$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$CACHE_FILE" | tail -1)"
     cache_build="$(sed -n 's/^CMAKE_CACHEFILE_DIR:INTERNAL=//p' "$CACHE_FILE" | tail -1)"
     cache_hip="$(sed -n 's/^CMAKE_HIP_COMPILER:[^=]*=//p' "$CACHE_FILE" | tail -1)"
+    cache_physx_root="$(sed -n 's/^PHYSX_ROOT_DIR:[^=]*=//p' "$CACHE_FILE" | tail -1)"
+    cache_physx_build="$(sed -n 's/^PHYSX_BUILD_DIR:[^=]*=//p' "$CACHE_FILE" | tail -1)"
+    cache_build_type="$(sed -n 's/^CMAKE_BUILD_TYPE:[^=]*=//p' "$CACHE_FILE" | tail -1)"
     cache_arch="$(sed -n 's/^CMAKE_HIP_ARCHITECTURES:[^=]*=//p' "$CACHE_FILE" | tail -1)"
     if [[ -z "$cache_arch" ]]; then
         cache_arch="$(sed -n 's/^HCU_ARCH:[^=]*=//p' "$CACHE_FILE" | tail -1)"
     fi
     if [[ "$cache_source" != "$SCRIPT_DIR" || "$cache_build" != "$BUILD_DIR" || \
-          "$cache_hip" != "$HIP_CLANG" || "$cache_arch" != "$HCU_ARCH" || ! -x "$cache_hip" ]]; then
-        printf 'Discarding stale/foreign CMake cache: source=%s build=%s hip=%s arch=%s expected_hip=%s expected_arch=%s\n' \
+          "$cache_hip" != "$HIP_CLANG" || "$cache_physx_root" != "$PHYSX_ROOT" || \
+          "$cache_physx_build" != "$PHYSX_BUILD_DIR" || \
+          "$cache_build_type" != "$CMAKE_BUILD_TYPE" || "$cache_arch" != "$HCU_ARCH" || \
+          ! -x "$cache_hip" ]]; then
+        printf 'Discarding stale/foreign CMake cache: source=%s build=%s hip=%s physx=%s physx_build=%s type=%s arch=%s expected_hip=%s expected_type=%s expected_arch=%s\n' \
             "${cache_source:-missing}" "${cache_build:-missing}" \
-            "${cache_hip:-missing}" "${cache_arch:-missing}" "$HIP_CLANG" "$HCU_ARCH"
+            "${cache_hip:-missing}" "${cache_physx_root:-missing}" \
+            "${cache_physx_build:-missing}" "${cache_build_type:-missing}" \
+            "${cache_arch:-missing}" \
+            "$HIP_CLANG" "$CMAKE_BUILD_TYPE" "$HCU_ARCH"
         reset_build_dir
     fi
 elif [[ -e "$BUILD_DIR" ]]; then
@@ -168,15 +188,14 @@ fi
 
 cd "$BUILD_DIR"
 
-# Run cmake if needed, or when example build rules changed.
-if [[ ( ! -f Makefile && ! -f build.ninja ) || "$SCRIPT_DIR/CMakeLists.txt" -nt CMakeCache.txt ]]; then
-    cmake "$SCRIPT_DIR" \
-        -DCMAKE_CXX_COMPILER="$(command -v g++)" \
-        -DCMAKE_HIP_COMPILER="$HIP_CLANG" \
-        -DCMAKE_HIP_ARCHITECTURES="$HCU_ARCH" \
-        -DPHYSX_ROOT_DIR="$PHYSX_ROOT" \
-        -DPHYSX_BUILD_DIR="$PHYSX_BUILD_DIR"
-fi
+# Always configure so build type, source paths, and example rules stay current.
+cmake "$SCRIPT_DIR" \
+    -DCMAKE_CXX_COMPILER="$(command -v g++)" \
+    -DCMAKE_HIP_COMPILER="$HIP_CLANG" \
+    -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE" \
+    -DCMAKE_HIP_ARCHITECTURES="$HCU_ARCH" \
+    -DPHYSX_ROOT_DIR="$PHYSX_ROOT" \
+    -DPHYSX_BUILD_DIR="$PHYSX_BUILD_DIR"
 
 TARGET="${1:-bench_physx_scene}"
 if [[ "$TARGET" == "all" ]]; then
