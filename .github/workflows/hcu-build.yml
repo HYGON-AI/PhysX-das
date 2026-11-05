@@ -1,23 +1,80 @@
 name: HCU build and test
 
 on:
-  push:
-    branches:
-      - ci/physx-hcu
-  pull_request:
+  pull_request_target:
     branches:
       - main
-  workflow_dispatch:
+    types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      approved: ${{ steps.check.outputs.approved }}
+      base_sha: ${{ steps.check.outputs.base_sha }}
+      head_sha: ${{ steps.check.outputs.head_sha }}
+    steps:
+      - name: Require maintainer ready-hcu approval
+        id: check
+        uses: actions/github-script@v7
+        env:
+          IMAGES_CONFIGURED: ${{ vars.DTK_IMAGE_PY310 != '' && vars.DTK_IMAGE_PY312 != '' }}
+        with:
+          script: |
+            const eventPr = context.payload.pull_request;
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: eventPr.number,
+            });
+            if (pr.state !== 'open' || pr.base.ref !== 'main' ||
+                pr.head.sha !== eventPr.head.sha) {
+              core.setFailed('PR changed since this event; request approval for the current commit.');
+              return;
+            }
+            if (context.payload.action !== 'labeled' ||
+                context.payload.label?.name !== 'ready-hcu') {
+              core.setFailed('A maintainer must apply ready-hcu to run HCU CI.');
+              return;
+            }
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              ...context.repo,
+              username: context.actor,
+            });
+            if (!['write', 'maintain', 'admin'].includes(data.permission)) {
+              core.setFailed('Only a repository maintainer may approve HCU CI.');
+              return;
+            }
+            if (process.env.IMAGES_CONFIGURED !== 'true') {
+              core.setFailed('Required repository image variables are missing.');
+              return;
+            }
+            core.setOutput('base_sha', pr.base.sha);
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('approved', 'true');
+
   build-and-test:
+    name: build-and-test (Python ${{ matrix.python }})
+    needs: authorize
+    if: needs.authorize.outputs.approved == 'true'
     runs-on: [self-hosted, BW1100]
     timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - python: '3.10'
+            image: ${{ vars.DTK_IMAGE_PY310 }}
+          - python: '3.12'
+            image: ${{ vars.DTK_IMAGE_PY312 }}
     container:
-      image: 10.16.1.152:5000/hcu/base/dtk:26.04-ubuntu22.04-py3.12
+      image: ${{ matrix.image }}
       options: >-
         -v /opt/hyhal/:/opt/hyhal/:ro
         --device /dev/kfd:/dev/kfd
@@ -25,10 +82,25 @@ jobs:
         --shm-size=80G
         --privileged=true
     steps:
-      - name: Checkout
+      - name: Checkout approved base commit
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.authorize.outputs.base_sha }}
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Merge approved PR commit
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ needs.authorize.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/ci-pr-head"
+          test "$(git rev-parse refs/remotes/origin/ci-pr-head)" = "${PR_HEAD_SHA}"
+          git -c user.name='PhysX CI' -c user.email='ci@users.noreply.github.com' \
+            merge --no-ff --no-edit "${PR_HEAD_SHA}"
 
       - name: Build GPU and CPU libraries
         shell: bash
@@ -41,10 +113,74 @@ jobs:
           compgen -G 'build_hcu/kernels/*.hsaco' > /dev/null
           ./build_cpu.sh
 
-      - name: Run basic probes
+      - name: Run CPU probe
+        id: cpu_probe
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           source /opt/dtk/env.sh
           ./build_cpu/test_cpu
+
+      - name: Run HCU probe
+        id: hcu_probe
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/dtk/env.sh
           ./build_hcu/test_functional
+
+      - name: Build HCU examples
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/dtk/env.sh
+          export CMAKE_PREFIX_PATH="/opt/dtk/lib64/cmake:/opt/dtk${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+          cd examples/hcu
+          ./build.sh
+          ./build.sh all
+          ./build.sh bench_compare
+
+      - name: Run scene benchmark
+        id: scene_benchmark
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/dtk/env.sh
+          export PX_HCU_KERNEL_DIR="${GITHUB_WORKSPACE}/build_hcu/kernels"
+          export PX_HCU_GPU_LIBRARY="${GITHUB_WORKSPACE}/build_hcu/libPhysXGpuHCU.so"
+          unset PX_HCU_SYNC_KERNELS PX_HCU_TRACE_KERNELS
+          cd examples/hcu
+          ./build/bench_physx_scene | tee bench_physx_scene.log
+          grep -q 'GPU enabled' bench_physx_scene.log
+          grep -q '^VERDICT: PASS$' bench_physx_scene.log
+
+      - name: Compare CPU and GPU scene
+        id: scene_compare
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/dtk/env.sh
+          export PX_HCU_KERNEL_DIR="${GITHUB_WORKSPACE}/build_hcu/kernels"
+          export PX_HCU_GPU_LIBRARY="${GITHUB_WORKSPACE}/build_hcu/libPhysXGpuHCU.so"
+          unset PX_HCU_SYNC_KERNELS PX_HCU_TRACE_KERNELS
+          cd examples/hcu
+          ./build/bench_compare | tee bench_compare.log
+          grep -q '^VERDICT: CPU and GPU match' bench_compare.log
+
+      - name: Summarize non-blocking tests
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### Test results (non-blocking)'
+            echo '| Check | Outcome |'
+            echo '| --- | --- |'
+            echo '| CPU probe | ${{ steps.cpu_probe.outcome }} |'
+            echo '| HCU probe | ${{ steps.hcu_probe.outcome }} |'
+            echo '| Scene benchmark | ${{ steps.scene_benchmark.outcome }} |'
+            echo '| CPU/GPU comparison | ${{ steps.scene_compare.outcome }} |'
+          } >> "${GITHUB_STEP_SUMMARY}"

@@ -96,10 +96,10 @@ detect_hcu_arch()
 BUILD_HCU_CACHE="$SCRIPT_DIR/../../build_hcu/CMakeCache.txt"
 HCU_ARCH="${HCU_ARCH:-}"
 if [[ -z "$HCU_ARCH" ]]; then
-    HCU_ARCH="$(read_cache_value "$BUILD_HCU_CACHE" CMAKE_HIP_ARCHITECTURES)"
+    HCU_ARCH="$(read_cache_value "$BUILD_HCU_CACHE" HCU_ARCH)"
 fi
 if [[ -z "$HCU_ARCH" ]]; then
-    HCU_ARCH="$(read_cache_value "$BUILD_HCU_CACHE" HCU_ARCH)"
+    HCU_ARCH="$(read_cache_value "$BUILD_HCU_CACHE" CMAKE_HIP_ARCHITECTURES)"
 fi
 if [[ -z "$HCU_ARCH" ]]; then
     HCU_ARCH="$(detect_hcu_arch || true)"
