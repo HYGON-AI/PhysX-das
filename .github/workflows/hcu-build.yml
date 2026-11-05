@@ -94,10 +94,14 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ needs.authorize.outputs.head_sha }}
+          PR_READ_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-          git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/ci-pr-head"
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${PR_READ_TOKEN}" | base64 -w0)" \
+            git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/ci-pr-head"
           test "$(git rev-parse refs/remotes/origin/ci-pr-head)" = "${PR_HEAD_SHA}"
           git -c user.name='PhysX CI' -c user.email='ci@users.noreply.github.com' \
             merge --no-ff --no-edit "${PR_HEAD_SHA}"
