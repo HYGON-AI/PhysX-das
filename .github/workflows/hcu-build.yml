@@ -14,10 +14,20 @@ permissions:
 
 jobs:
   build-and-test:
+    name: build-and-test (Python ${{ matrix.python }})
     runs-on: [self-hosted, BW1100]
     timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - python: '3.10'
+            image: ${{ vars.DTK_IMAGE_PY310 }}
+          - python: '3.12'
+            image: ${{ vars.DTK_IMAGE_PY312 }}
     container:
-      image: 10.16.1.152:5000/hcu/base/dtk:26.04-ubuntu22.04-py3.12
+      image: ${{ matrix.image }}
       options: >-
         -v /opt/hyhal/:/opt/hyhal/:ro
         --device /dev/kfd:/dev/kfd
@@ -48,3 +58,29 @@ jobs:
           source /opt/dtk/env.sh
           ./build_cpu/test_cpu
           ./build_hcu/test_functional
+
+      - name: Build HCU examples
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/dtk/env.sh
+          export CMAKE_PREFIX_PATH="/opt/dtk/lib64/cmake:/opt/dtk${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+          cd examples/hcu
+          ./build.sh
+          ./build.sh all
+          ./build.sh bench_compare
+
+      - name: Run HCU examples
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/dtk/env.sh
+          export PX_HCU_KERNEL_DIR="${GITHUB_WORKSPACE}/build_hcu/kernels"
+          export PX_HCU_GPU_LIBRARY="${GITHUB_WORKSPACE}/build_hcu/libPhysXGpuHCU.so"
+          unset PX_HCU_SYNC_KERNELS PX_HCU_TRACE_KERNELS
+          cd examples/hcu
+          ./build/bench_physx_scene | tee bench_physx_scene.log
+          grep -q 'GPU enabled' bench_physx_scene.log
+          grep -q '^VERDICT: PASS$' bench_physx_scene.log
+          ./build/bench_compare | tee bench_compare.log
+          grep -q '^VERDICT: CPU and GPU match' bench_compare.log
