@@ -20,6 +20,14 @@
 * If your patch fixes for example Issue #33, write `Fixes #33`.
 * Explain your solution with a few words.
 
+## HCU CI for fork pull requests
+
+If you have access to fork this private repository, push your changes to your fork and open a pull request targeting `HYGON-AI/PhysX-das` `main`. Opening the pull request triggers the CI approval check; the GPU jobs wait for maintainer approval.
+
+After reviewing the current commit, a maintainer with write access applies the `ready-hcu` label to the pull request. This starts the Python 3.10 and 3.12 HCU jobs on the base repository's runners. Contributors do not need to configure the base repository's image variables in their forks.
+
+If you push another commit, ask a maintainer to remove and reapply `ready-hcu` after reviewing it. A label already present on the pull request does not approve a new commit. Library and example build failures fail CI; probe and example runtime failures are recorded in the job summary but do not stop the remaining checks.
+
 ## Did you write a cosmetic patch?
 
 * Patches that are purely cosmetic will not be considered and associated Pull Requests will be closed.
