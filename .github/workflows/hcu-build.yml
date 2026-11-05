@@ -1,0 +1,50 @@
+name: HCU build and test
+
+on:
+  push:
+    branches:
+      - ci/physx-hcu
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: [self-hosted, BW1100]
+    timeout-minutes: 240
+    container:
+      image: 10.16.1.152:5000/hcu/base/dtk:26.04-ubuntu22.04-py3.12
+      options: >-
+        -v /opt/hyhal/:/opt/hyhal/:ro
+        --device /dev/kfd:/dev/kfd
+        --device /dev/dri:/dev/dri
+        --shm-size=80G
+        --privileged=true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Build GPU and CPU libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/dtk/env.sh
+          export CMAKE_PREFIX_PATH="/opt/dtk/lib64/cmake:/opt/dtk${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+          ./build_hcu.sh
+          test -s build_hcu/libPhysXGpuHCU.so
+          compgen -G 'build_hcu/kernels/*.hsaco' > /dev/null
+          ./build_cpu.sh
+
+      - name: Run basic probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/dtk/env.sh
+          ./build_cpu/test_cpu
+          ./build_hcu/test_functional
