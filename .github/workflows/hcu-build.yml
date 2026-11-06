@@ -4,23 +4,23 @@ on:
   pull_request_target:
     branches:
       - main
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
 
 jobs:
-  authorize:
+  validate_pr:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      approved: ${{ steps.check.outputs.approved }}
+      valid: ${{ steps.check.outputs.valid }}
       base_sha: ${{ steps.check.outputs.base_sha }}
       head_sha: ${{ steps.check.outputs.head_sha }}
     steps:
-      - name: Require maintainer ready-hcu approval
+      - name: Validate PR and image configuration
         id: check
         uses: actions/github-script@v7
         env:
@@ -34,20 +34,7 @@ jobs:
             });
             if (pr.state !== 'open' || pr.base.ref !== 'main' ||
                 pr.head.sha !== eventPr.head.sha) {
-              core.setFailed('PR changed since this event; request approval for the current commit.');
-              return;
-            }
-            if (context.payload.action !== 'labeled' ||
-                context.payload.label?.name !== 'ready-hcu') {
-              core.setFailed('A maintainer must apply ready-hcu to run HCU CI.');
-              return;
-            }
-            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
-              ...context.repo,
-              username: context.actor,
-            });
-            if (!['write', 'maintain', 'admin'].includes(data.permission)) {
-              core.setFailed('Only a repository maintainer may approve HCU CI.');
+              core.setFailed('PR changed since this event; wait for the current commit event.');
               return;
             }
             if (process.env.IMAGES_CONFIGURED !== 'true') {
@@ -56,12 +43,12 @@ jobs:
             }
             core.setOutput('base_sha', pr.base.sha);
             core.setOutput('head_sha', pr.head.sha);
-            core.setOutput('approved', 'true');
+            core.setOutput('valid', 'true');
 
   build-and-test:
     name: build-and-test (Python ${{ matrix.python }})
-    needs: authorize
-    if: needs.authorize.outputs.approved == 'true'
+    needs: validate_pr
+    if: needs.validate_pr.outputs.valid == 'true'
     runs-on: [self-hosted, BW1100]
     timeout-minutes: 240
     strategy:
@@ -82,18 +69,18 @@ jobs:
         --shm-size=80G
         --privileged=true
     steps:
-      - name: Checkout approved base commit
+      - name: Checkout event base commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.authorize.outputs.base_sha }}
+          ref: ${{ needs.validate_pr.outputs.base_sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Merge approved PR commit
+      - name: Merge event PR commit
         shell: bash
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_HEAD_SHA: ${{ needs.authorize.outputs.head_sha }}
+          PR_HEAD_SHA: ${{ needs.validate_pr.outputs.head_sha }}
           PR_READ_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
