@@ -22,13 +22,11 @@
 
 ## HCU CI for fork pull requests
 
-For the image variables, fork PR permissions, and approval flow, see the [HCU CI guide](docs/HCU_CI.md).
+For the image variables, fork PR permissions, and CI flow, see the [HCU CI guide](docs/HCU_CI.md).
 
-If you have access to fork this private repository, push your changes to your fork and open a pull request targeting `HYGON-AI/PhysX-das` `main`. Opening the pull request triggers the CI approval check; a red `authorize` check before approval is expected, and the GPU jobs wait for maintainer approval.
+If you have access to fork this private repository, push your changes to your fork and open a pull request targeting `HYGON-AI/PhysX-das` `main`. Opening or updating the pull request automatically starts the Python 3.10 and 3.12 HCU jobs on the base repository's runners. Contributors do not need to configure the base repository's image variables in their forks or add a label.
 
-After reviewing the current commit, a maintainer with write access applies the `ready-hcu` label to the pull request. This starts the Python 3.10 and 3.12 HCU jobs on the base repository's runners. Contributors do not need to configure the base repository's image variables in their forks.
-
-If you push another commit, ask a maintainer to remove and reapply `ready-hcu` after reviewing it. A label already present on the pull request does not approve a new commit. Library and example build failures fail CI; probe and example runtime failures are recorded in the job summary but do not stop the remaining checks.
+Library and example build failures fail CI; probe and example runtime failures are recorded in the job summary but do not stop the remaining checks.
 
 ## Did you write a cosmetic patch?
 

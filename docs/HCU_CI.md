@@ -1,11 +1,11 @@
 # PhysX-das HCU CI 说明
 
-本文说明主仓当前的 [HCU 工作流](../.github/workflows/hcu-build.yml)：镜像如何保存、fork PR 如何触发 CI、为什么需要 `ready-hcu`，以及构建和测试的判定方式。供贡献者和维护者讨论、排查问题使用。
+本文说明主仓当前的 [HCU 工作流](../.github/workflows/hcu-build.yml)：镜像如何保存、fork PR 如何自动触发 CI，以及构建和测试的判定方式。供贡献者和维护者讨论、排查问题使用。
 
 ## 先看结论
 
 - 两个 DTK 镜像地址保存在主仓 **Settings → Secrets and variables → Actions → Variables**，变量名为 `DTK_IMAGE_PY310` 和 `DTK_IMAGE_PY312`。工作流只写变量名，不写镜像地址。
-- fork PR 创建或更新后，会触发主仓的审批作业 `authorize`；**GPU 编译不会立刻开始**。有写权限的维护者审核当前提交并添加 `ready-hcu` 后，Python 3.10 和 3.12 两个 GPU 作业才会启动。
+- 指向主仓 `main` 的 PR 创建、更新或重新打开后，包括 fork PR，都会自动触发 Python 3.10 和 3.12 两个 GPU 作业；**不需要添加 `ready-hcu` 标签**。
 - GPU/CPU 库和 HCU 示例的**构建失败会让 CI 失败**。探针和示例运行的失败会记入作业摘要，并继续执行其他检查；因此绿色 CI 表示构建和流程完成，**不代表每项运行测试都通过**。
 - 编译和运行这些 HCU 示例不需要安装 PyTorch（`torch`）。
 
@@ -46,23 +46,22 @@ container:
 
 最初使用 `pull_request` 时，fork PR **确实触发了**两个矩阵作业，但没有得到主仓镜像变量，容器未按预期初始化。由此可见，“PR 能触发工作流”和“工作流能取得镜像并跑 GPU 构建”是两件事。
 
-现在使用 `pull_request_target`，工作流本身来自主仓 `main`，所以可以取得主仓变量。不过它默认只检出主仓代码。当前工作流在**人工批准后**才固定主仓与 PR 的提交 SHA，用只读 `GITHUB_TOKEN` 临时拉取 PR 提交、核对 SHA，再合并到工作目录中编译。检出步骤设置了 `persist-credentials: false`，取 PR 代码所用的 token 只在该步骤提供。[GitHub 事件说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)。
+现在使用 `pull_request_target`，工作流本身来自主仓 `main`，所以可以取得主仓变量。不过它默认只检出主仓代码。当前工作流在 PR 事件触发后固定主仓与 PR 的提交 SHA，用只读 `GITHUB_TOKEN` 临时拉取 PR 提交、核对 SHA，再合并到工作目录中编译。检出步骤设置了 `persist-credentials: false`，取 PR 代码所用的 token 只在该步骤提供。[GitHub 事件说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)。
 
-## 3. 为什么要贴 `ready-hcu`？
+## 3. fork PR 如何自动启动？
 
-`pull_request_target` 能访问主仓上下文，而此 CI 随后会在**自托管 GPU runner 的特权容器**中编译和运行 PR 代码。标签是人工审核门：只有拥有主仓 `write`、`maintain` 或 `admin` 权限的人，针对当前提交触发的 `labeled: ready-hcu` 事件，才能启动 GPU 作业。维护者应先检查 PR 改动，尤其是构建脚本、依赖和会执行的代码，再贴标签。标签和只读 token 降低了风险，但不能把特权 runner 上运行的 PR 代码变成安全代码。[GitHub 的 `pull_request_target` 安全说明](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target)。
+此前使用 `ready-hcu` 是为了让维护者审核后再占用 GPU runner。现在为了避免忘记贴标签，已移除这道人工门控：`opened`、`synchronize`、`reopened` 事件直接启动构建。`pull_request_target` 能访问主仓上下文，工作流随后会在**自托管 GPU runner 的特权容器**中编译和运行 PR 代码。只读 token 和提交 SHA 校验仍保留，但自动执行 fork 代码增加了 runner 风险；对私有仓库的 fork 权限、runner 隔离和可执行的 PR 代码应持续管理。[GitHub 的 `pull_request_target` 安全说明](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target)。
 
 完整顺序：
 
 1. 有权访问并 fork 此私有仓库的贡献者，把提交推到自己的 fork，发起目标为 `HYGON-AI/PhysX-das:main` 的 PR。
-2. `opened`、`reopened` 或新提交的 `synchronize` 事件启动 `authorize`。没有新的维护者标签事件时，它会显示红色，GPU 作业跳过；**这是等待审核的预期状态**。
-3. 维护者审核当前提交，在 PR 页面右侧 **Labels** 中添加 `ready-hcu`。这产生 `labeled` 事件。工作流核对 PR 仍开放、目标仍是 `main`、提交 SHA 未变、贴标签者有写权限、两个镜像变量存在。
-4. 审批通过后，Python 3.10 和 3.12 作业分别在 `self-hosted, BW1100` runner 上启动。作业检出审核时的主仓提交、拉取并核对审核时的 PR 提交，然后构建和测试。
-5. PR 后续又有新提交时，`synchronize` 会重新进入等待审核状态。**已有的标签不等于批准新提交**；维护者审核新提交后，需移除并重新添加 `ready-hcu`。
+2. `opened`、`reopened` 或新提交的 `synchronize` 事件启动 `validate_pr`。它检查 PR 仍开放、目标仍是 `main`、提交 SHA 未变、两个镜像变量存在；检查通过后直接放行 GPU 作业。
+3. Python 3.10 和 3.12 作业分别在 `self-hosted, BW1100` runner 上启动。作业检出事件对应的主仓提交、拉取并核对该 PR 提交，然后构建和测试。
+4. PR 后续又有新提交时，新的 `synchronize` 事件自动触发新一轮 CI，无需移除或添加标签。
 
 贡献者不需要在自己的 fork 中复制这两个镜像变量，也不需要为主仓 PR CI 启用 fork 自己的 Actions；PR 事件发送到主仓，作业在主仓运行。但贡献者必须有权限 fork 私有仓库，主仓和组织策略也必须允许相关 PR 事件。[fork PR 事件位置](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)。
 
-## 4. 批准后固定执行什么？
+## 4. 触发后固定执行什么？
 
 两个镜像使用相同的步骤：
 
@@ -76,10 +75,9 @@ container:
 
 ## 5. 常见误解与排查
 
-- **“我提交 fork PR 后，CI 为什么是红色？”** 先看失败步骤。如果是 `authorize` 提示需要 `ready-hcu`，这是等待维护者审核；若已贴标签，查看最新的 `labeled` 工作流，而非只看早先的 `opened` 工作流。
-- **“贴过一次标签，后续提交会自动继续吗？”** 不会。当前工作流只把维护者针对当前提交的新 `labeled` 事件当作批准；更新提交后要重新审核、移除并重新贴标签。
+- **“我提交 fork PR 后，为什么没有立刻开始 GPU 作业？”** 查看 `validate_pr` 是否通过、两个 Variables 是否存在，以及 `BW1100` runner 是否可用。runner 忙时作业会排队；现在不需要 `ready-hcu`。
+- **“我推送新提交后需要重新贴标签吗？”** 不需要。`synchronize` 事件会自动触发新一轮 CI。
 - **“绿色 CI 是否表示 CPU/GPU 比较完全一致？”** 不表示。构建是阻断项，运行测试是非阻断项；查看作业摘要和测试日志中的 `VERDICT`。此前曾出现 `bench_compare` 的 `MISMATCH`，它没有在本方案中被当作功能修复。
-- **“贴标签后仍没有 GPU 作业？”** 检查 `authorize` 的错误、两个 Variables 是否存在、贴标签者权限，以及 `BW1100` runner 是否可用。runner 忙时作业会排队。
-- **“FastPT 为什么能跑？”** [FastPT 的工作流](https://github.com/HYGON-AI/FastPT/blob/v2.12/.github/workflows/pr-test.yml)也采用维护者标签配合 `pull_request_target`；但 FastPT 是公开仓库，不能仅凭它推断私有仓库的 fork 策略。PhysX-das 已单独用 [临时 fork PR #4](https://github.com/HYGON-AI/PhysX-das/pull/4) 验证，[Python 3.10 和 3.12 完整运行均成功](https://github.com/HYGON-AI/PhysX-das/actions/runs/42019031304)；验证 PR 已关闭且未合并。
+- **“FastPT 为什么能跑？”** [FastPT 的工作流](https://github.com/HYGON-AI/FastPT/blob/v2.12/.github/workflows/pr-test.yml)使用维护者标签配合 `pull_request_target`；PhysX-das 目前保留相同的主仓事件上下文，但改为自动触发。此前的 [临时 fork PR #4](https://github.com/HYGON-AI/PhysX-das/pull/4) 验证了标签版本能取得主仓变量并完成两套构建；自动版本以新的无标签 fork PR 验证记录为准。
 
 工作流和 GitHub/组织策略以后若改变，应重新做一次真实 fork PR 验证。
