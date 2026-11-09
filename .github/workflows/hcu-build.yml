@@ -100,7 +100,7 @@ jobs:
           set -euo pipefail
           source /opt/dtk/env.sh
           export CMAKE_PREFIX_PATH="/opt/dtk/lib64/cmake:/opt/dtk${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-          ./build_hcu.sh
+          ./build_hcu.sh gfx938
           test -s build_hcu/libPhysXGpuHCU.so
           compgen -G 'build_hcu/kernels/*.hsaco' > /dev/null
           ./build_cpu.sh
