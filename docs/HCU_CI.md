@@ -67,7 +67,7 @@ container:
 两个镜像使用相同的构建和测试步骤：
 
 1. 加载 `/opt/dtk/env.sh`，为编译设置 `CMAKE_PREFIX_PATH=/opt/dtk/lib64/cmake:/opt/dtk:...`。
-2. 在仓库根目录运行 `./build_hcu.sh`，检查 `build_hcu/libPhysXGpuHCU.so` 和 `build_hcu/kernels/*.hsaco`；再运行 `./build_cpu.sh`。这些都是**阻断性构建检查**。
+2. 在仓库根目录运行 `./build_hcu.sh gfx938`（构建 runner 无法自动检测 HCU 架构；此前成功的 BW1100 作业使用 `gfx938`），检查 `build_hcu/libPhysXGpuHCU.so` 和 `build_hcu/kernels/*.hsaco`；再运行 `./build_cpu.sh`。这些都是**阻断性构建检查**。
 3. 在 `examples/hcu` 运行 `./build.sh`、`./build.sh all` 和 `./build.sh bench_compare`。示例**编译失败会阻断 CI**。
 4. 将 `build_hcu/`、`build_cpu/`、`examples/hcu/build/` 打包到共享目录；测试作业按同一次运行、同一次尝试和对应 Python 版本恢复产物。
 5. 分别运行 `./build_cpu/test_cpu` 和 `./build_hcu/test_functional`，再设置 HCU 模块路径，运行 `bench_physx_scene` 和 `bench_compare`。探针与示例运行均设为 `continue-on-error`；其真实结果写入作业摘要，后续步骤照常执行。
