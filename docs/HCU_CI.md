@@ -56,9 +56,10 @@ container:
 
 1. 有权访问并 fork 此私有仓库的贡献者，把提交推到自己的 fork，发起目标为 `HYGON-AI/PhysX-das:main` 的 PR。
 2. `opened`、`reopened` 或新提交的 `synchronize` 事件启动 `validate_pr`。它检查 PR 仍开放、目标仍是 `main`、提交 SHA 未变、两个镜像变量存在；检查通过后直接放行 GPU 作业。
-3. Python 3.10 和 3.12 构建作业在 `hygon-build` runner 上启动。作业检出事件对应的主仓提交、拉取并核对该 PR 提交，然后编译。每套产物保存到 `/ci_public/PhysX-das/runs/<run_id>/<attempt>/py<版本>/`。
-4. 两套构建都成功后，Python 3.10 和 3.12 测试作业在 `hygon-bw1100-1card` runner 上分别启动，核对 PR 提交 SHA、恢复对应版本的产物，再运行探针和示例。
-5. PR 后续又有新提交时，新的 `synchronize` 事件自动触发新一轮 CI，无需移除或添加标签。
+3. `detect_arch` 先在 `hygon-bw1100-1card` GPU runner 上执行 `rocminfo`，从设备 `Name: gfx...` 中读取架构；检测失败会阻断后续作业。`hygon-build` 构建 runner 无法自行检测设备架构。
+4. Python 3.10 和 3.12 构建作业在 `hygon-build` runner 上启动。作业检出事件对应的主仓提交、拉取并核对该 PR 提交，用检测到的架构编译。每套产物保存到 `/ci_public/PhysX-das/runs/<run_id>/<attempt>/py<版本>/`。
+5. 两套构建都成功后，Python 3.10 和 3.12 测试作业在 `hygon-bw1100-1card` runner 上分别启动，核对 PR 提交 SHA、恢复对应版本的产物，再运行探针和示例。
+6. PR 后续又有新提交时，新的 `synchronize` 事件自动触发新一轮 CI，无需移除或添加标签。
 
 贡献者不需要在自己的 fork 中复制这两个镜像变量，也不需要为主仓 PR CI 启用 fork 自己的 Actions；PR 事件发送到主仓，作业在主仓运行。但贡献者必须有权限 fork 私有仓库，主仓和组织策略也必须允许相关 PR 事件。[fork PR 事件位置](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)。
 
@@ -67,7 +68,7 @@ container:
 两个镜像使用相同的构建和测试步骤：
 
 1. 加载 `/opt/dtk/env.sh`，为编译设置 `CMAKE_PREFIX_PATH=/opt/dtk/lib64/cmake:/opt/dtk:...`。
-2. 在仓库根目录运行 `./build_hcu.sh gfx936`（构建 runner 无法自动检测 HCU 架构；目标测试卡 `bw66` 的 `rocminfo` 显示 `gfx936`），检查 `build_hcu/libPhysXGpuHCU.so` 和 `build_hcu/kernels/*.hsaco`；再运行 `./build_cpu.sh`。这些都是**阻断性构建检查**。
+2. 在仓库根目录运行 `./build_hcu.sh "$HCU_ARCH"`（`HCU_ARCH` 来自 GPU runner 的 `rocminfo`），检查 `build_hcu/libPhysXGpuHCU.so` 和 `build_hcu/kernels/*.hsaco`；再运行 `./build_cpu.sh`。这些都是**阻断性构建检查**。
 3. 在 `examples/hcu` 运行 `./build.sh`、`./build.sh all` 和 `./build.sh bench_compare`。示例**编译失败会阻断 CI**。
 4. 将 `build_hcu/`、`build_cpu/`、`examples/hcu/build/` 打包到共享目录；测试作业按同一次运行、同一次尝试和对应 Python 版本恢复产物。
 5. 分别运行 `./build_cpu/test_cpu` 和 `./build_hcu/test_functional`，再设置 HCU 模块路径，运行 `bench_physx_scene` 和 `bench_compare`。探针与示例运行均设为 `continue-on-error`；其真实结果写入作业摘要，后续步骤照常执行。
