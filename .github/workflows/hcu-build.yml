@@ -45,12 +45,45 @@ jobs:
             core.setOutput('head_sha', pr.head.sha);
             core.setOutput('valid', 'true');
 
-  build-and-test:
-    name: build-and-test (Python ${{ matrix.python }})
+  detect_arch:
+    name: detect HCU architecture
     needs: validate_pr
     if: needs.validate_pr.outputs.valid == 'true'
-    runs-on: [self-hosted, BW1100]
-    timeout-minutes: 240
+    runs-on: hygon-bw1100-1card
+    timeout-minutes: 10
+    container:
+      image: ${{ vars.DTK_IMAGE_PY312 }}
+      options: >-
+        -v /opt/hyhal/:/opt/hyhal/:ro
+        --device /dev/kfd:/dev/kfd
+        --device /dev/dri:/dev/dri
+        --privileged=true
+    outputs:
+      arch: ${{ steps.detect.outputs.arch }}
+    steps:
+      - name: Read device architecture
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/dtk/env.sh
+          info="$(rocminfo)"
+          arch=''
+          while IFS= read -r line; do
+            if [[ "$line" =~ Name:[[:space:]]+(gfx[0-9A-Za-z]+) ]]; then
+              arch="${BASH_REMATCH[1]}"
+              break
+            fi
+          done <<< "$info"
+          test -n "$arch"
+          echo "arch=$arch" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build (Python ${{ matrix.python }})
+    needs: [validate_pr, detect_arch]
+    if: needs.validate_pr.outputs.valid == 'true'
+    runs-on: hygon-build
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -64,6 +97,7 @@ jobs:
       image: ${{ matrix.image }}
       options: >-
         -v /opt/hyhal/:/opt/hyhal/:ro
+        -v /ci_public:/ci_public
         --device /dev/kfd:/dev/kfd
         --device /dev/dri:/dev/dri
         --shm-size=80G
@@ -95,14 +129,101 @@ jobs:
 
       - name: Build GPU and CPU libraries
         shell: bash
+        env:
+          HCU_ARCH: ${{ needs.detect_arch.outputs.arch }}
         run: |
           set -euo pipefail
           source /opt/dtk/env.sh
           export CMAKE_PREFIX_PATH="/opt/dtk/lib64/cmake:/opt/dtk${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-          ./build_hcu.sh
+          ./build_hcu.sh "$HCU_ARCH"
           test -s build_hcu/libPhysXGpuHCU.so
           compgen -G 'build_hcu/kernels/*.hsaco' > /dev/null
           ./build_cpu.sh
+
+      - name: Build HCU examples
+        shell: bash
+        run: |
+          set -euo pipefail
+          source /opt/dtk/env.sh
+          export CMAKE_PREFIX_PATH="/opt/dtk/lib64/cmake:/opt/dtk${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+          cd examples/hcu
+          ./build.sh
+          ./build.sh all
+          ./build.sh bench_compare
+
+      - name: Share build outputs
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ needs.validate_pr.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}/py${{ matrix.python }}"
+          mkdir -p "$d"
+          tar -cf "$d/build.tar" build_hcu build_cpu examples/hcu/build
+          printf '%s\n' "$PR_HEAD_SHA" > "$d/head.sha"
+
+  test:
+    name: test (Python ${{ matrix.python }})
+    needs: [validate_pr, build]
+    runs-on: hygon-bw1100-1card
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - python: '3.10'
+            image: ${{ vars.DTK_IMAGE_PY310 }}
+          - python: '3.12'
+            image: ${{ vars.DTK_IMAGE_PY312 }}
+    container:
+      image: ${{ matrix.image }}
+      options: >-
+        -v /opt/hyhal/:/opt/hyhal/:ro
+        -v /ci_public:/ci_public
+        --device /dev/kfd:/dev/kfd
+        --device /dev/dri:/dev/dri
+        --shm-size=80G
+        --privileged=true
+    steps:
+      - name: Checkout event base commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate_pr.outputs.base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Merge event PR commit
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ needs.validate_pr.outputs.head_sha }}
+          PR_READ_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${PR_READ_TOKEN}" | base64 -w0)" \
+            git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/ci-pr-head"
+          test "$(git rev-parse refs/remotes/origin/ci-pr-head)" = "${PR_HEAD_SHA}"
+          git -c user.name='PhysX CI' -c user.email='ci@users.noreply.github.com' \
+            merge --no-ff --no-edit "${PR_HEAD_SHA}"
+
+      - name: Restore build outputs
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ needs.validate_pr.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}/py${{ matrix.python }}"
+          test "$(cat "$d/head.sha")" = "$PR_HEAD_SHA"
+          tar -xf "$d/build.tar"
+          test -s build_hcu/libPhysXGpuHCU.so
+          test -x build_cpu/test_cpu
+          test -x build_hcu/test_functional
+          test -x examples/hcu/build/bench_physx_scene
+          test -x examples/hcu/build/bench_compare
 
       - name: Run CPU probe
         id: cpu_probe
@@ -121,17 +242,6 @@ jobs:
           set -euo pipefail
           source /opt/dtk/env.sh
           ./build_hcu/test_functional
-
-      - name: Build HCU examples
-        shell: bash
-        run: |
-          set -euo pipefail
-          source /opt/dtk/env.sh
-          export CMAKE_PREFIX_PATH="/opt/dtk/lib64/cmake:/opt/dtk${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
-          cd examples/hcu
-          ./build.sh
-          ./build.sh all
-          ./build.sh bench_compare
 
       - name: Run scene benchmark
         id: scene_benchmark
