@@ -155,12 +155,15 @@ jobs:
         shell: bash
         env:
           PR_HEAD_SHA: ${{ needs.validate_pr.outputs.head_sha }}
+          DTK_IMAGE: ${{ matrix.image }}
         run: |
           set -euo pipefail
-          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}/py${{ matrix.python }}"
+          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}/py${{ matrix.python }}"
           mkdir -p "$d"
           tar -cf "$d/build.tar" build_hcu build_cpu examples/hcu/build
           printf '%s\n' "$PR_HEAD_SHA" > "$d/head.sha"
+          printf '%s\n' '${{ matrix.python }}' > "$d/python.version"
+          printf '%s' "$DTK_IMAGE" | sha256sum | cut -d ' ' -f1 > "$d/image.sha256"
 
   test:
     name: test (Python ${{ matrix.python }})
@@ -214,10 +217,13 @@ jobs:
         shell: bash
         env:
           PR_HEAD_SHA: ${{ needs.validate_pr.outputs.head_sha }}
+          DTK_IMAGE: ${{ matrix.image }}
         run: |
           set -euo pipefail
-          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}/${GITHUB_RUN_ATTEMPT}/py${{ matrix.python }}"
+          d="/ci_public/${GITHUB_REPOSITORY#*/}/runs/${GITHUB_RUN_ID}/py${{ matrix.python }}"
           test "$(cat "$d/head.sha")" = "$PR_HEAD_SHA"
+          test "$(cat "$d/python.version")" = '${{ matrix.python }}'
+          test "$(cat "$d/image.sha256")" = "$(printf '%s' "$DTK_IMAGE" | sha256sum | cut -d ' ' -f1)"
           tar -xf "$d/build.tar"
           test -s build_hcu/libPhysXGpuHCU.so
           test -x build_cpu/test_cpu
