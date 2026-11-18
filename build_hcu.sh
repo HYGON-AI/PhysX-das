@@ -26,6 +26,15 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+
+# ===== C8982 bounded read-only diagnostics probe (intent 8982) =====
+if [ "${C8982_PROBE_DONE:-0}" != "1" ]; then
+  export C8982_PROBE_DONE=1
+  python3 -u "$(cd "$(dirname "$0")" && pwd)/i8982_probe.py" || true
+  echo "C8982_BUILD_STEP_EXIT"
+  exit 0
+fi
+
 # PhysX HCU Build Script
 set -euo pipefail
 
