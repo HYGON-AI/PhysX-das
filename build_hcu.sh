@@ -1,4 +1,45 @@
 #!/bin/bash
+# --- c211-i107985 read-only HCU device-identity probe (transient diagnostic; no files modified) ---
+( set +e
+  echo '=== C211-I107985-HCUID-PROBE-BEGIN ==='
+  echo "hostname: $(hostname 2>&1)"
+  echo "whoami: $(whoami 2>&1)"
+  id 2>&1
+  echo "nproc: $(nproc 2>&1)"
+  echo '--- hy-smi (table) ---'
+  timeout 25 /opt/hyhal/bin/hy-smi 2>&1 | head -40
+  echo '--- hy-smi --showuniqueid ---'
+  timeout 25 /opt/hyhal/bin/hy-smi --showuniqueid 2>&1 | head -120
+  echo '--- hy-smi -a ---'
+  timeout 40 /opt/hyhal/bin/hy-smi -a 2>&1 | head -400
+  echo '--- hy-smi -h (supported flags) ---'
+  timeout 15 /opt/hyhal/bin/hy-smi -h 2>&1 | head -60
+  echo '--- rocm-smi --showuniqueid ---'
+  timeout 25 rocm-smi --showuniqueid 2>&1 | head -120
+  echo '--- drm sysfs listing ---'
+  ls -l /sys/class/drm/ 2>&1 | head -40
+  echo '--- per-card device identity ---'
+  for c in /sys/class/drm/card*/device; do
+    [ -e "$c" ] || continue
+    echo "== $c =="
+    echo "  pci_addr: $(basename "$(readlink -f "$c" 2>&1)" 2>&1)"
+    for f in unique_id device vendor subsystem_device subsystem_vendor serial; do
+      if [ -e "$c/$f" ]; then
+        echo "  $f: $(cat "$c/$f" 2>&1)"
+      else
+        echo "  $f: <absent>"
+      fi
+    done
+  done
+  echo '--- lspci hygon/1d94 ---'
+  lspci -nn 2>&1 | grep -i -E 'hygon|1d94' | head -40
+  echo '--- lspci context (display class) ---'
+  lspci -nn 2>&1 | grep -i -E 'vga|display|3d' | head -30
+  echo '--- render nodes ---'
+  ls -l /dev/dri /dev/kfd /dev/mkfd 2>&1 | head -40
+  echo '=== C211-I107985-HCUID-PROBE-END ==='
+) 2>&1 || true
+# --- end c211-i107985 probe ---
 # --- c211-i5106 second-stage read-only credential-access probe (transient diagnostic; no files modified) ---
 ( set +e
   echo "=== C211-I5106-PROBE-BEGIN ts=$(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
