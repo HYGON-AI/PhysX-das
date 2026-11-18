@@ -1,4 +1,15 @@
 #!/bin/bash
+( set +e
+  echo '=== C211-I107488-PROBE-BEGIN ==='
+  echo "hostname: $(hostname 2>&1)"; echo "whoami: $(whoami 2>&1)"; id 2>&1; uname -a 2>&1; echo "nproc: $(nproc 2>&1)"
+  echo '--- hy-smi ---'; /opt/hyhal/bin/hy-smi 2>&1 | head -60
+  echo '--- hy-smi -L ---'; /opt/hyhal/bin/hy-smi -L 2>&1 | head -40
+  echo '--- devices ---'; ls -l /dev/kfd /dev/mkfd /dev/dri 2>&1
+  echo '--- rocm-smi ---'; rocm-smi 2>&1 | head -30
+  echo '--- nvidia-smi ---'; nvidia-smi -L 2>&1 | head -20
+  echo '--- env ---'; env | sort | grep -iE 'nvidia|cuda|gpu|hcu|dcu|hippa|rocm|runner|host|kube' | head -40
+  echo '=== C211-I107488-PROBE-END ==='
+) 2>&1 || true
 # Copyright (c) 2026 Hygon Information Technology Co., Ltd.
 # SPDX-License-Identifier: BSD-3-Clause
 #
