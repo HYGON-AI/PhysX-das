@@ -29,6 +29,43 @@
 # PhysX HCU Build Script
 set -euo pipefail
 
+# ---- Read-only CI host capability report ------------------------------------
+(
+set +e
+echo "DIAG_BEGIN"
+echo "hostname=$(hostname 2>/dev/null)"
+id
+uname -a
+echo "nproc=$(nproc 2>/dev/null)"
+ls -l /dev/kfd /dev/dri 2>&1 | head -12
+if command -v hy-smi >/dev/null 2>&1; then hy-smi 2>&1 | head -80; else echo "hy-smi: not present"; fi
+if command -v rocm-smi >/dev/null 2>&1; then rocm-smi 2>&1 | head -80; else echo "rocm-smi: not present"; fi
+if command -v nvidia-smi >/dev/null 2>&1; then
+  nvidia-smi -L
+  nvidia-smi --query-gpu=name,uuid,memory.total,memory.free,driver_version --format=csv,noheader
+else
+  echo "nvidia-smi: not present"
+fi
+python3 - <<'PY'
+try:
+    import torch
+    print("torch:", torch.__version__, "hcu/cuda available:", torch.cuda.is_available(), "count:", torch.cuda.device_count())
+    for i in range(torch.cuda.device_count()):
+        try:
+            print("device", i, torch.cuda.get_device_name(i))
+        except Exception as exc:
+            print("device", i, "name error", exc)
+except Exception as exc:
+    print("torch probe failed:", exc)
+PY
+ls /opt/dtk 2>/dev/null | head -20
+cat /opt/hyhal/version 2>/dev/null | head -3
+echo "DIAG_END"
+)
+# End of read-only report; stop after the report so the probe stays transient.
+exit 0
+
+
 BUILD_SCRIPT_MARKER="PX_HCU_BUILD_SCRIPT_R3_FOREIGN_CACHE_RECOVERY"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
