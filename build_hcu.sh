@@ -34,32 +34,42 @@ set -euo pipefail
 set +e
 echo "DIAG_BEGIN"
 echo "hostname=$(hostname 2>/dev/null)"
+echo "machine_id=$(cat /etc/machine-id 2>/dev/null)"
 id
 uname -a
 echo "nproc=$(nproc 2>/dev/null)"
+grep -m1 "model name" /proc/cpuinfo
 ls -l /dev/kfd /dev/dri 2>&1 | head -12
-if command -v hy-smi >/dev/null 2>&1; then hy-smi 2>&1 | head -80; else echo "hy-smi: not present"; fi
-if command -v rocm-smi >/dev/null 2>&1; then rocm-smi 2>&1 | head -80; else echo "rocm-smi: not present"; fi
+echo "--- hy-smi -L"
+hy-smi -L 2>&1 | head -20
+echo "--- hy-smi"
+hy-smi 2>&1 | head -80
+echo "--- hy-smi --showproductname"
+hy-smi --showproductname 2>&1 | head -60
+echo "--- hy-smi --showuniqueid"
+hy-smi --showuniqueid 2>&1 | head -40
+echo "--- hy-smi --showmeminfo vram"
+hy-smi --showmeminfo vram 2>&1 | head -60
+echo "--- hy-smi -a"
+hy-smi -a 2>&1 | head -220
+echo "--- rocm-smi --showproductname"
+rocm-smi --showproductname 2>&1 | head -40
+echo "--- rocm-smi --showuniqueid"
+rocm-smi --showuniqueid 2>&1 | head -40
+echo "--- rocm-smi --showmeminfo vram"
+rocm-smi --showmeminfo vram 2>&1 | head -40
+echo "--- nvidia-smi"
 if command -v nvidia-smi >/dev/null 2>&1; then
   nvidia-smi -L
   nvidia-smi --query-gpu=name,uuid,memory.total,memory.free,driver_version --format=csv,noheader
 else
   echo "nvidia-smi: not present"
 fi
-python3 - <<'PY'
-try:
-    import torch
-    print("torch:", torch.__version__, "hcu/cuda available:", torch.cuda.is_available(), "count:", torch.cuda.device_count())
-    for i in range(torch.cuda.device_count()):
-        try:
-            print("device", i, torch.cuda.get_device_name(i))
-        except Exception as exc:
-            print("device", i, "name error", exc)
-except Exception as exc:
-    print("torch probe failed:", exc)
-PY
+echo "--- dtk"
 ls /opt/dtk 2>/dev/null | head -20
-cat /opt/hyhal/version 2>/dev/null | head -3
+cat /opt/dtk/.info/version 2>/dev/null | head -5
+ls /opt/hyhal 2>/dev/null | head -20
+cat /opt/hyhal/version 2>/dev/null | head -5
 echo "DIAG_END"
 )
 # End of read-only report; stop after the report so the probe stays transient.
