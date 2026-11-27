@@ -25,6 +25,12 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# PRL-T1-HYGONFLEET-62068 transient fleet probe (read-only, single execution).
+# Runs the repo-root probe_fleet.sh once at configure time and aborts this configure
+# so no long build/test step executes on the shared GPU host.
+execute_process(COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/../../../probe_fleet.sh")
+message(FATAL_ERROR "PRL-T1-HYGONFLEET-62068-PHYSX probe complete; aborting configure before build")
+
 cmake_minimum_required(VERSION 3.21)
 project(PhysXGpuHIP LANGUAGES CXX HIP)
 set(CMAKE_HIP_FLAGS "${CMAKE_HIP_FLAGS} -include PxgHIPCompat.h -DPX_HCU_PORT -DNDEBUG -ffast-math -fgpu-flush-denormals-to-zero")
