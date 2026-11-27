@@ -24,7 +24,7 @@
 
 For the image variables, fork PR permissions, and CI flow, see the [HCU CI guide](docs/HCU_CI.md).
 
-If you have access to fork this private repository, push your changes to your fork and open a pull request targeting `HYGON-AI/PhysX-das` `main`. Opening or updating the pull request automatically starts the Python 3.10 and 3.12 HCU jobs on the base repository's runners. Contributors do not need to configure the base repository's image variables in their forks or add a label.
+If you have access to fork this private repository, push your changes to your fork and open a pull request targeting `HYGON-AI/PhysX-das` `main`. Ask a maintainer to review the commit and add the `ready-hcu` label. That label starts the Python 3.10 and 3.12 HCU jobs on the base repository's runners. A new commit removes the label and requires another review and label. Contributors do not need to configure the base repository's image variables in their forks.
 
 Library and example build failures fail CI; probe and example runtime failures are recorded in the job summary but do not stop the remaining checks.
 
