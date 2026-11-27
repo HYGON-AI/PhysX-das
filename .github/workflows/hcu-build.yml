@@ -4,7 +4,7 @@ on:
   pull_request_target:
     branches:
       - main
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read
@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
     outputs:
       valid: ${{ steps.check.outputs.valid }}
       base_sha: ${{ steps.check.outputs.base_sha }}
@@ -35,6 +35,28 @@ jobs:
             if (pr.state !== 'open' || pr.base.ref !== 'main' ||
                 pr.head.sha !== eventPr.head.sha) {
               core.setFailed('PR changed since this event; wait for the current commit event.');
+              return;
+            }
+            core.setOutput('valid', 'false');
+            if (context.payload.action === 'labeled' &&
+                context.payload.label?.name !== 'ready-hcu') {
+              return;
+            }
+            const isFork = pr.head.repo?.id !== pr.base.repo.id;
+            const isReady = pr.labels.some(label => label.name === 'ready-hcu');
+            if (isFork && context.payload.action === 'synchronize') {
+              if (isReady) {
+                await github.rest.issues.removeLabel({
+                  ...context.repo,
+                  issue_number: pr.number,
+                  name: 'ready-hcu',
+                });
+              }
+              core.notice('New fork commit requires ready-hcu again.');
+              return;
+            }
+            if (isFork && !isReady) {
+              core.notice('Waiting for ready-hcu label.');
               return;
             }
             if (process.env.IMAGES_CONFIGURED !== 'true') {
